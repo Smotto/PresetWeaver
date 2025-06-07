@@ -112,7 +112,7 @@ namespace OperatingSystemFunctions {
 			std::filesystem::path desired_path = path / "Lost Ark" / "EFGame" / "Customizing";
 			if (std::filesystem::is_directory(desired_path)) {
 				std::cout << "LOA Customizing directory found in " << desired_path.generic_string() << "\n";
-				found_path = path;
+				found_path = desired_path;
 				break;
 			}
 		}
@@ -156,25 +156,29 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	std::cout << "Debug console is now available!" << std::endl;
 	printf("Command line: %s\n", lpCmdLine);
 
+	// TODO: move operating system functions somewhere else
 	std::vector<std::filesystem::path> steam_library_paths = OperatingSystemFunctions::RetrieveSteamLibraryPaths();
-	std::filesystem::path              customizing_path    = OperatingSystemFunctions::FindLostArkCustomizationDirectory(steam_library_paths);
+	std::filesystem::path              customizing_directory_path    = OperatingSystemFunctions::FindLostArkCustomizationDirectory(steam_library_paths);
 
-	if (customizing_path.empty()) {
+	DEBUG_LOG("Customizing path" << customizing_directory_path);
+
+	if (customizing_directory_path.empty()) {
 		DEBUG_LOG("Lost Ark customizing directory not found!");
 		return EXIT_FAILURE;
 	}
 
-	std::unique_ptr<CusManager> manager = std::make_unique<CusManager>(customizing_path);
+	std::unique_ptr<CusManager> cus_file_manager = std::make_unique<CusManager>(customizing_directory_path);
 
-	if (!manager->LoadFiles()) {
+	if (!cus_file_manager->LoadFiles()) {
 		DEBUG_LOG("Failed to load .cus files!");
 		return EXIT_FAILURE;
 	}
 
-	std::map<std::string, CusFile> files = manager->GetFiles();
+	std::vector<CusFile> files = cus_file_manager->GetFiles();
 	auto ui = AppWindow::create();
 
-	ui->global<GlobalVariables>().set_current_region(slint::SharedString(OperatingSystemFunctions::GetLocalizationRegion()));
+	ui->global<GlobalVariables>().set_files(cus_file_manager->GetSlintModel());
+	ui->global<GlobalVariables>().set_local_region(slint::SharedString(OperatingSystemFunctions::GetLocalizationRegion()));
 	ui->run();
 
 	return 0;
