@@ -4,29 +4,51 @@
 #include <fstream>
 #include <ranges>
 
-CusManager::CusManager(const std::filesystem::path& directory)
-    : customizing_directory(directory) {
+CusManager::CusManager(const std::filesystem::path& customizing_directory)
+    : customizing_directory(customizing_directory), slint_model(std::make_shared<slint::VectorModel<SlintCusFile>>()) {
 }
 
-std::map<std::string, CusFile>& CusManager::GetFiles() {
-	return files;
+void CusManager::AddFile(const CusFile& file) {
+	internal_files.push_back(file);
+
+	slint_model->push_back(SlintCusFile {
+	    .path      = slint::SharedString(file.path_relative_to_customizing_directory.string()),
+	    .region    = slint::SharedString(file.region),
+	    .modified  = file.modified,
+	    .invalid   = file.invalid,
+	    .data_size = static_cast<int>(file.data.size())
+	});
 }
 
-std::vector<char>& CusManager::GetFile(const std::string& relative_path) {
-	files[relative_path].modified = true;
-	return files[relative_path].data;
-}
+void CusManager::UpdateFile(const CusFile& file, size_t index) {
+	if (index < internal_files.size()) {
+		internal_files[index] = file;
 
-std::vector<std::string> CusManager::GetFileList() {
-	std::vector<std::string> list;
-	for (const auto& key : files | std::views::keys) {
-		list.push_back(key);
+		// Update Slint Model
+		slint_model->set_row_data(index, SlintCusFile{
+			.path = slint::SharedString(file.path_relative_to_customizing_directory.string()),
+				.region = slint::SharedString(file.region),
+				.modified = file.modified,
+				.invalid = file.invalid,
+				.data_size = static_cast<int>(file.data.size())
+		});
 	}
-	return list;
+}
+
+std::shared_ptr<slint::VectorModel<SlintCusFile>> CusManager::GetSlintModel() {
+	return slint_model;
+}
+
+CusFile& CusManager::GetInternalFile(size_t index) {
+	return internal_files[index];
+}
+
+std::vector<CusFile>& CusManager::GetFiles() {
+	return internal_files;
 }
 
 size_t CusManager::Count() const {
-	return files.size();
+	return internal_files.size();
 }
 
 bool CusManager::ModifyRegion(CusFile& file, const std::string& region_name) {
@@ -49,7 +71,7 @@ bool CusManager::LoadRegion(CusFile& file) const {
 	// Validate region
 	if (!available_regions.contains(file.region)) {
 		file.invalid = true; // TODO: This is useless, file object goes into the void. IDC
-		DEBUG_LOG("Warning: Invalid region '" << file.region << "' in " << file.path);
+		DEBUG_LOG("Warning: Invalid region '" << file.region << "' in " << file.path_relative_to_customizing_directory);
 		return false;
 	}
 
@@ -61,7 +83,7 @@ bool CusManager::LoadFiles() {
 		for (const auto& entry : std::filesystem::recursive_directory_iterator(customizing_directory)) {
 			if (entry.is_regular_file() && entry.path().extension() == ".cus") {
 				CusFile file;
-				file.path = entry.path();
+				file.path_relative_to_customizing_directory = std::filesystem::relative(entry.path(), customizing_directory).string();
 
 				std::ifstream f(entry.path(), std::ios::binary);
 				if (!f.is_open())
@@ -85,25 +107,26 @@ bool CusManager::LoadFiles() {
 					continue;
 				}
 
-				std::string key = std::filesystem::relative(entry.path(), customizing_directory).string();
-				files[key]      = std::move(file);
+				AddFile(file);
 			}
 		}
 
-		DEBUG_LOG("Loaded " << files.size() << " .cus files");
-		return !files.empty();
+		DEBUG_LOG("Loaded " << internal_files.size() << " .cus files");
+		return !internal_files.empty();
 	} catch (const std::exception& e) {
 		DEBUG_LOG("Error loading files: " << e.what());
 		return false;
 	}
 }
 
-void CusManager::SaveModified() {
+void CusManager::SaveModified() const {
 	int saved = 0;
-	for (auto& [path, data, region, modified, invalid] : files | std::views::values) {
-		if (modified) {
-			std::ofstream f(path, std::ios::binary);
-			f.write(data.data(), data.size());
+	for (auto& file : internal_files) {
+		if (file.modified) {
+			// TODO: Needs customizing directory + relative path to customizing directory
+			std::string file_write_out_path;
+			std::ofstream f(file.path_relative_to_customizing_directory, std::ios::binary);
+			f.write(file.data.data(), file.data.size());
 			f.close();
 			saved++;
 		}
