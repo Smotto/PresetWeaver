@@ -1,0 +1,194 @@
+import { Button, VerticalBox, HorizontalBox, ScrollView, HorizontalBox } from "std-widgets.slint";
+import "./fonts/NotoColorEmoji-Regular.ttf";
+
+export global GlobalVariables {
+    in property <string> current_region;
+}
+
+component RegionButton inherits Rectangle {
+    in-out property <bool> toggled;
+
+    in-out property <string> region_emoji;
+    in-out property <string> region_name;
+
+    property <int> name;
+    property <color> normal-color: #2a2730;
+    property <color> hover-color: #4a4458;
+    property <color> pressed-color: #1a1620;
+    property <color> toggled-color: #6d4c7d;
+
+    property <length> default_padding: 20px;
+    property <length> default_font_size: 18px;
+
+    background: area.pressed ? pressed-color : toggled ? toggled-color : area.has-hover ? hover-color : normal-color;
+
+    animate background { duration: 150ms; }
+
+    border-radius: 2px;
+    width: 100px;
+    height: 36px;
+
+    callback select;
+    area := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        mouse-cursor: pointer;
+        clicked => {
+            root.select();
+        }
+    }
+
+    VerticalLayout {
+        alignment: center;
+        HorizontalBox {
+            alignment: center;
+            spacing: 2px;
+            padding: 0px;
+
+            Text {
+                font-size: default_font_size - 2px;
+                text: region_name;
+            }
+
+            Rectangle {
+                width: 5px;
+            }
+
+            Text {
+                font-family: "Noto Color Emoji";
+                font-size: default_font_size;
+                text: region_emoji;
+            }
+        }
+    }
+}
+
+component RegionPanel inherits Rectangle {
+    in-out property <string> selected_region;
+
+    HorizontalBox {
+        spacing: 25px;
+        RegionButton {
+            region_name: "USA";
+            region_emoji: "🇺🇸";
+            toggled: selected_region == "USA";
+            select => {
+                selected_region = "USA";
+            }
+        }
+
+        RegionButton {
+            region_name: "KOR";
+            region_emoji: "🇰🇷";
+            toggled: selected_region == "KOR";
+            select => {
+                selected_region = "KOR";
+            }
+        }
+
+        RegionButton {
+            region_name: "RUS";
+            region_emoji: "🇷🇺";
+            toggled: selected_region == "RUS";
+            select => {
+                selected_region = "RUS"
+            }
+        }
+    }
+}
+
+component FileSlot inherits Rectangle {
+    in-out property <string> name;
+    in-out property <string> region;
+    in-out property <bool> converted: region == GlobalVariables.current_region;
+
+    width: 270px;
+    height: 40px;
+    background: Colors.pink;
+}
+
+component FilePanel {
+    in-out property <int> viewport_height;
+
+    VerticalLayout {
+        ScrollView {
+            // Absolute Width and Height of the actual view
+            width: 300px;
+            height: 200px;
+
+            // How much we can scroll
+            // TODO: Height has to be calculated during run-time by how many files there are in the directory.
+            viewport-height: 600px;
+            viewport-width: 300px;
+            VerticalBox {
+                FileSlot { }
+
+                FileSlot { }
+
+                FileSlot { }
+
+                FileSlot { }
+
+                FileSlot { }
+
+                FileSlot { }
+
+                FileSlot { }
+
+                FileSlot { }
+
+                FileSlot { }
+            }
+        }
+    }
+}
+
+component ConvertButton inherits Button {
+    height: 50px;
+    width: 100px;
+    text: "Convert";
+}
+
+component Background inherits Rectangle {
+    Image {
+        source: @image-url("./assets/Echidna-Photopead.jpg");
+        image-fit: preserve;
+    }
+}
+
+export component AppWindow inherits Window {
+    width: 768px;
+    height: 800px;
+    title: "Jarod's Lost Ark Preset Converter";
+
+    callback request-increase-value();
+
+    Background {
+        VerticalLayout {
+            spacing: 20px;
+            alignment: center;
+            HorizontalLayout {
+                alignment: center;
+                Text {
+                    font-size: 18px;
+                    text: "Current Region: " + GlobalVariables.current_region;
+                }
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                FilePanel { }
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                RegionPanel { }
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                ConvertButton { }
+            }
+        }
+    }
+}
