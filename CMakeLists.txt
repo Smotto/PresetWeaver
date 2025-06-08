@@ -18,7 +18,7 @@ if (NOT Slint_FOUND)
     FetchContent_MakeAvailable(Slint)
 endif (NOT Slint_FOUND)
 
-add_executable(LostArkPresetConverter src/main.cpp src/CusManager.cpp src/Debug.h src/CusManager.h)
+add_executable(LostArkPresetConverter src/main.cpp src/CusManager.cpp src/Debug.h src/CusManager.h src/OperatingSystemFunctions.h)
 target_link_libraries(LostArkPresetConverter PRIVATE Slint::Slint)
 set_property(TARGET LostArkPresetConverter APPEND PROPERTY WIN32_EXECUTABLE TRUE) # Remove console window when running the exe.
 slint_target_sources(LostArkPresetConverter ui/app-window.slint)

@@ -1,11 +1,23 @@
 #include "CusManager.h"
 
 #include "Debug.h"
+#include "OperatingSystemFunctions.h"
+
 #include <fstream>
 #include <ranges>
+#include <utility>
 
-CusManager::CusManager(const std::filesystem::path& customizing_directory)
-    : customizing_directory(customizing_directory), slint_model(std::make_shared<slint::VectorModel<SlintCusFile>>()) {
+CusManager::CusManager()
+    : customizing_directory(OperatingSystemFunctions::FindLostArkCustomizationDirectory()), slint_model(std::make_shared<slint::VectorModel<SlintCusFile>>()) {
+	// TODO: move operating system functions somewhere else
+	std::filesystem::path              customizing_directory_path    = OperatingSystemFunctions::FindLostArkCustomizationDirectory();
+
+	DEBUG_LOG("Customizing path" << customizing_directory_path);
+
+	if (customizing_directory_path.empty()) {
+		DEBUG_LOG("Lost Ark customizing directory not found!");
+	}
+	customizing_directory = customizing_directory_path;
 }
 
 void CusManager::AddFile(const CusFile& file) {
@@ -16,8 +28,7 @@ void CusManager::AddFile(const CusFile& file) {
 	    .region    = slint::SharedString(file.region),
 	    .modified  = file.modified,
 	    .invalid   = file.invalid,
-	    .data_size = static_cast<int>(file.data.size())
-	});
+	    .data_size = static_cast<int>(file.data.size()) });
 }
 
 void CusManager::UpdateFile(const CusFile& file, size_t index) {
@@ -25,13 +36,7 @@ void CusManager::UpdateFile(const CusFile& file, size_t index) {
 		internal_files[index] = file;
 
 		// Update Slint Model
-		slint_model->set_row_data(index, SlintCusFile{
-			.path = slint::SharedString(file.path_relative_to_customizing_directory.string()),
-				.region = slint::SharedString(file.region),
-				.modified = file.modified,
-				.invalid = file.invalid,
-				.data_size = static_cast<int>(file.data.size())
-		});
+		slint_model->set_row_data(index, SlintCusFile { .path = slint::SharedString(file.path_relative_to_customizing_directory.string()), .region = slint::SharedString(file.region), .modified = file.modified, .invalid = file.invalid, .data_size = static_cast<int>(file.data.size()) });
 	}
 }
 
@@ -124,7 +129,7 @@ void CusManager::SaveModified() const {
 	for (auto& file : internal_files) {
 		if (file.modified) {
 			// TODO: Needs customizing directory + relative path to customizing directory
-			std::string file_write_out_path;
+			std::string   file_write_out_path;
 			std::ofstream f(file.path_relative_to_customizing_directory, std::ios::binary);
 			f.write(file.data.data(), file.data.size());
 			f.close();

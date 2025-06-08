@@ -1,21 +1,6 @@
 import { Button, VerticalBox, HorizontalBox, ScrollView, HorizontalBox } from "std-widgets.slint";
 import "./fonts/NotoColorEmoji-Regular.ttf";
 
-global RegionHelper {
-    public pure function get-emoji(region: string) -> string {
-        if (region == "USA") {
-            return "🇺🇸";
-        }
-        if (region == "KOR") {
-            return "🇰🇷"; 
-        }
-        if (region == "RUS") {
-            return "🇷🇺";
-        }
-        return "🌍";
-    }
-}
-
 export struct SlintCusFile {
     path: string,
     region: string,
@@ -26,6 +11,28 @@ export struct SlintCusFile {
 export global GlobalVariables {
     in property <string> local_region;
     in-out property <[SlintCusFile]> files;
+}
+
+global RegionHelper {
+    public pure function is_file_converted(file_region: string) -> bool {
+        if (file_region != GlobalVariables.local_region) {
+            return false;
+        }
+        return true;
+    }
+
+    public pure function get-emoji(region: string) -> string {
+        if (region == "USA") {
+            return "🇺🇸";
+        }
+        if (region == "KOR") {
+            return "🇰🇷";
+        }
+        if (region == "RUS") {
+            return "🇷🇺";
+        }
+        return "🌍";
+    }
 }
 
 component RegionButton inherits Rectangle {
@@ -89,6 +96,7 @@ component RegionButton inherits Rectangle {
 component RegionPanel inherits Rectangle {
     in-out property <string> selected_region;
     property <[string]> regions: ["USA", "KOR", "RUS"];
+    selected_region: GlobalVariables.local_region;
 
     HorizontalBox {
         spacing: 25px;
@@ -112,7 +120,7 @@ component FileSlot inherits Rectangle {
     border-radius: 8px;
     width: 270px;
     height: 40px;
-    background: converted ? #3B82F6EF : #EF4444EF;
+    background: converted ? #2B3851 : #A8293B;
 
     VerticalLayout {
         HorizontalBox {
@@ -133,9 +141,14 @@ component FileSlot inherits Rectangle {
 }
 
 component FilePanel {
-    in-out property <int> viewport_height;
-
     VerticalLayout {
+        Text {
+            font-size: 24px;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            text: @tr("Local Incompatible Files");
+        }
+
         ScrollView {
             // Absolute Width and Height of the actual view
             width: 300px;
@@ -145,9 +158,6 @@ component FilePanel {
             viewport-height: GlobalVariables.files.length * 50px;
             viewport-width: 300px;
             VerticalBox {
-                FileSlot { converted: false;}
-                FileSlot { converted: true;}
-
                 for file[index] in GlobalVariables.files: FileSlot {
                     file: file;
                 }
@@ -156,10 +166,17 @@ component FilePanel {
     }
 }
 
-component ConvertButton inherits Button {
-    height: 50px;
-    width: 100px;
-    text: @tr("🛠️ Convert");
+component ConvertButton inherits Rectangle {
+    height: 60px;
+    width: 200px;
+
+    background: #10B981CC;
+    Text {
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-size: 20px;
+        text: @tr("🛠️ Convert");
+    }
 }
 
 component Background inherits Rectangle {
@@ -183,10 +200,14 @@ export component AppWindow inherits Window {
             HorizontalLayout {
                 alignment: center;
                 Text {
-                    font-size: 24px;
+                    font-size: 20px;
                     font-weight: 600;
-                    text: @tr("Your Local Region: ") + GlobalVariables.local_region;
+                    text: @tr("Detected Region: ") + GlobalVariables.local_region;
                 }
+            }
+
+            HorizontalLayout {
+                alignment: center;
             }
 
             HorizontalLayout {
@@ -194,14 +215,20 @@ export component AppWindow inherits Window {
                 FilePanel { }
             }
 
-            HorizontalLayout {
+            VerticalBox {
                 alignment: center;
-                RegionPanel { }
-            }
+                spacing: 0px;
+                Text {
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    font-size: 18px;
+                    text: @tr("Click to Convert");
+                }
 
-            HorizontalLayout {
-                alignment: center;
-                ConvertButton { }
+                HorizontalLayout {
+                    alignment: center;
+                    RegionPanel { }
+                }
             }
         }
     }
