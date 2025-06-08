@@ -36,7 +36,7 @@ public:
 	std::vector<CusFile>&                             GetFiles();
 
 	[[nodiscard]] size_t                              Count() const;
-	static bool                                       ModifyRegion(CusFile& file, const std::string& region_name);
+	bool                                              ConvertFilesToRegion(const std::string& region_name);
 
 	bool                                              LoadFiles();
 	void                                              SaveModified() const;

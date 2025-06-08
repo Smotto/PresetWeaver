@@ -13,6 +13,7 @@ export global GlobalVariables {
     in-out property <string> selected_region;
 
     callback request-refresh-files();
+    callback convert-files();
 }
 
 global RegionHelper {
@@ -67,13 +68,13 @@ component RegionButton inherits Rectangle {
     width: 100px;
     height: 36px;
 
-    callback select_region;
+    callback select-region;
     area := TouchArea {
         width: parent.width;
         height: parent.height;
         mouse-cursor: pointer;
         clicked => {
-            root.select_region();
+            root.select-region();
             GlobalVariables.request_refresh_files();
         }
     }
@@ -118,7 +119,7 @@ component RegionPanel inherits Rectangle {
 
 component FileSlot inherits Rectangle {
     in-out property <SlintCusFile> file;
-    in-out property <bool> converted: file.region == GlobalVariables.local_region;
+    in-out property <bool> converted: file.region == GlobalVariables.selected_region;
     property <length> default_font_size: 18px;
 
     border-radius: 8px;
@@ -183,13 +184,14 @@ component ConvertButton inherits Rectangle {
 
     animate background { duration: 150ms; }
 
-    callback convert_files;
+    callback convert-clicked();
+
     area := TouchArea {
         width: parent.width;
         height: parent.height;
         mouse-cursor: pointer;
         clicked => {
-            root.convert_files();
+            root.convert-clicked();
         }
     }
 
@@ -252,7 +254,11 @@ export component AppWindow inherits Window {
 
                 HorizontalLayout {
                     alignment: center;
-                    ConvertButton { }
+                    ConvertButton {
+                        convert_clicked => {
+                            GlobalVariables.convert-files();
+                        }
+                    }
                 }
             }
         }
