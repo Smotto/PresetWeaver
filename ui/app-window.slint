@@ -1,5 +1,4 @@
 import { Button, VerticalBox, HorizontalBox, ScrollView, HorizontalBox } from "std-widgets.slint";
-import "./fonts/NotoColorEmoji-Regular.ttf";
 
 export struct SlintCusFile {
     path: string,
@@ -21,24 +20,24 @@ global RegionHelper {
         return true;
     }
 
-    public pure function get-emoji(region: string) -> string {
+    public pure function get-flag-image(region: string) -> image {
         if (region == "USA") {
-            return "🇺🇸";
+            return @image-url("assets/united-states-of-america-flag-waving.svg");
         }
         if (region == "KOR") {
-            return "🇰🇷";
+            return @image-url("assets/south-korea-flag-waving.svg");
         }
         if (region == "RUS") {
-            return "🇷🇺";
+            return @image-url("assets/russia-flag-waving.svg");
         }
-        return "🌍";
+        return @image-url("assets/question-mark.svg");
     }
 }
 
 component RegionButton inherits Rectangle {
     in-out property <bool> toggled;
 
-    in property <string> region_emoji;
+    in property <image> region_flag;
     in property <string> region_name;
 
     property <int> name;
@@ -68,26 +67,22 @@ component RegionButton inherits Rectangle {
         }
     }
 
-    VerticalLayout {
+    HorizontalBox {
         alignment: center;
-        HorizontalBox {
-            alignment: center;
-            spacing: 2px;
-            padding: 0px;
+        Text {
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-size: default_font_size - 2px;
+            text: region_name;
+        }
 
-            Text {
-                font-size: default_font_size - 2px;
-                text: region_name;
-            }
-
-            Rectangle {
-                width: 5px;
-            }
-
-            Text {
-                font-family: "Noto Color Emoji";
-                font-size: default_font_size;
-                text: region_emoji;
+        Rectangle {
+            Image {
+                width: 32px;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                source: region_flag;
+                image-fit: contain;
             }
         }
     }
@@ -103,7 +98,7 @@ component RegionPanel inherits Rectangle {
 
         for region in regions: RegionButton {
             region_name: region;
-            region_emoji: RegionHelper.get-emoji(region);
+            region_flag: RegionHelper.get-flag-image(region);
             toggled: selected_region == region;
             select => {
                 selected_region = region;
@@ -130,11 +125,10 @@ component FileSlot inherits Rectangle {
                 text: file.path;
             }
 
-            Text {
-                vertical-alignment: center;
-                font-family: "Noto Color Emoji";
-                font-size: default_font_size;
-                text: RegionHelper.get-emoji(file.region);
+            Image {
+                width: 24px;
+                source: RegionHelper.get-flag-image(file.region);
+                image-fit: contain;
             }
         }
     }
@@ -157,6 +151,7 @@ component FilePanel {
             // How much we can scroll
             viewport-height: GlobalVariables.files.length * 50px;
             viewport-width: 300px;
+
             VerticalBox {
                 for file[index] in GlobalVariables.files: FileSlot {
                     file: file;
@@ -181,8 +176,9 @@ component ConvertButton inherits Rectangle {
 
 component Background inherits Rectangle {
     Image {
-        source: @image-url("./assets/Echidna-Photopead.jpg");
+        source: @image-url("assets/Echidna-Photopead.jpg");
         image-fit: preserve;
+        accessible-label: "Echidna Background";
     }
 }
 
@@ -190,6 +186,7 @@ export component AppWindow inherits Window {
     width: 768px;
     height: 800px;
     title: @tr("Jarod's Lost Ark Preset Converter");
+    default-font-family: "Segoe UI";
 
     callback request-increase-value();
 

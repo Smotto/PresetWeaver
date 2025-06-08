@@ -20,7 +20,10 @@ endif (NOT Slint_FOUND)
 
 add_executable(LostArkPresetConverter src/main.cpp src/CusManager.cpp src/Debug.h src/CusManager.h src/OperatingSystemFunctions.h)
 target_link_libraries(LostArkPresetConverter PRIVATE Slint::Slint)
-set_property(TARGET LostArkPresetConverter APPEND PROPERTY WIN32_EXECUTABLE TRUE) # Remove console window when running the exe.
+set_target_properties(LostArkPresetConverter PROPERTIES
+        WIN32_EXECUTABLE TRUE
+        SLINT_EMBED_RESOURCES embed-files
+)
 slint_target_sources(LostArkPresetConverter ui/app-window.slint)
 
 # On Windows, copy the Slint DLL next to the application binary so that it's found.
