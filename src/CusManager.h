@@ -17,26 +17,27 @@ struct CusFile {
 
 class CusManager {
 public:
-	explicit CusManager(const std::filesystem::path& customizing_directory);
+	CusManager();
+	~CusManager() = default;
+
 	void                                              AddFile(const CusFile& file);
 	void                                              UpdateFile(const CusFile& file, size_t index);
 	std::shared_ptr<slint::VectorModel<SlintCusFile>> GetSlintModel();
 	CusFile&                                          GetInternalFile(size_t index);
-	~CusManager() = default;
 
-	std::vector<CusFile>& GetFiles();
+	std::vector<CusFile>&                             GetFiles();
 
-	size_t                Count() const;
-	static bool           ModifyRegion(CusFile& file, const std::string& region_name);
+	[[nodiscard]] size_t                              Count() const;
+	static bool                                       ModifyRegion(CusFile& file, const std::string& region_name);
 
-	bool                  LoadFiles();
-	void                  SaveModified() const;
+	bool                                              LoadFiles();
+	void                                              SaveModified() const;
 
 private:
+	const std::unordered_set<std::string>             available_regions = std::unordered_set<std::string> { R"(USA)", R"(KOR)", R"(RUS)" };
+	std::filesystem::path                             customizing_directory;
 	std::vector<CusFile>                              internal_files;
 	std::shared_ptr<slint::VectorModel<SlintCusFile>> slint_model;
-	std::filesystem::path                             customizing_directory;
-	const std::unordered_set<std::string>             available_regions = std::unordered_set<std::string> { R"(USA)", R"(KOR)", R"(RUS)" };
 
 	bool                                              LoadRegion(CusFile& file) const;
 };
