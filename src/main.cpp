@@ -26,6 +26,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		cus_file_manager->RefreshUnconvertedFiles(selected_region.data());
 	});
 
+	ui->global<GlobalVariables>().on_convert_files([&cus_file_manager, &ui]() {
+		auto region = ui->global<GlobalVariables>().get_selected_region();
+		cus_file_manager->ConvertFilesToRegion(region.data());
+		cus_file_manager->RefreshUnconvertedFiles(region.data());
+		cus_file_manager->SaveModified();
+	});
+
 	ui->run();
 
 	return 0;

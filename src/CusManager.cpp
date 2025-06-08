@@ -42,14 +42,21 @@ size_t CusManager::Count() const {
 	return internal_files.size();
 }
 
-bool CusManager::ModifyRegion(CusFile& file, const std::string& region_name) {
+bool CusManager::ConvertFilesToRegion(const std::string& region_name) {
 	if (region_name.length() > 3) {
 		DEBUG_LOG("Region name too long, shouldn't be longer than 3 characters.");
 		return false;
 	}
 
-	file.region   = region_name;
-	file.modified = true;
+	for (CusFile& file : internal_files) {
+		if (file.region != region_name) {
+			file.region = region_name;
+			file.data[0x08] = region_name[0];
+			file.data[0x09] = region_name[1];
+			file.data[0x0A] = region_name[2];
+			file.modified = true;
+		}
+	}
 
 	return true;
 }
