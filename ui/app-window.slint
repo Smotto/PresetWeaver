@@ -9,10 +9,20 @@ export struct SlintCusFile {
 
 export global GlobalVariables {
     in property <string> local_region;
-    in-out property <[SlintCusFile]> files;
+    in-out property <[SlintCusFile]> unconverted_files;
+    in-out property <string> selected_region;
+
+    callback request-refresh-files();
 }
 
 global RegionHelper {
+    public pure function is_unconverted_files_empty() -> bool {
+        if (GlobalVariables.unconverted_files.length == 0) {
+            return true;
+        }
+        return false;
+    }
+
     public pure function is_file_converted(file_region: string) -> bool {
         if (file_region != GlobalVariables.local_region) {
             return false;
@@ -57,13 +67,14 @@ component RegionButton inherits Rectangle {
     width: 100px;
     height: 36px;
 
-    callback select;
+    callback select_region;
     area := TouchArea {
         width: parent.width;
         height: parent.height;
         mouse-cursor: pointer;
         clicked => {
-            root.select();
+            root.select_region();
+            GlobalVariables.request_refresh_files();
         }
     }
 
@@ -89,9 +100,7 @@ component RegionButton inherits Rectangle {
 }
 
 component RegionPanel inherits Rectangle {
-    in-out property <string> selected_region;
     property <[string]> regions: ["USA", "KOR", "RUS"];
-    selected_region: GlobalVariables.local_region;
 
     HorizontalBox {
         spacing: 25px;
@@ -99,9 +108,9 @@ component RegionPanel inherits Rectangle {
         for region in regions: RegionButton {
             region_name: region;
             region_flag: RegionHelper.get-flag-image(region);
-            toggled: selected_region == region;
-            select => {
-                selected_region = region;
+            toggled: GlobalVariables.selected_region == region;
+            select_region => {
+                GlobalVariables.selected_region = region;
             }
         }
     }
@@ -149,11 +158,11 @@ component FilePanel {
             height: 200px;
 
             // How much we can scroll
-            viewport-height: GlobalVariables.files.length * 50px;
+            viewport-height: GlobalVariables.unconverted_files.length * 50px;
             viewport-width: 300px;
 
             VerticalBox {
-                for file[index] in GlobalVariables.files: FileSlot {
+                for file[index] in GlobalVariables.unconverted_files: FileSlot {
                     file: file;
                 }
             }
@@ -163,9 +172,31 @@ component FilePanel {
 
 component ConvertButton inherits Rectangle {
     height: 60px;
-    width: 200px;
+    width: 160px;
 
-    background: #10B981CC;
+    property <color> normal-color: #2a2730;
+    property <color> hover-color: #4a4458;
+    property <color> pressed-color: #1a1620;
+
+    property <length> default_padding: 20px;
+    property <length> default_font_size: 18px;
+
+    animate background { duration: 150ms; }
+
+    callback convert_files;
+    area := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        mouse-cursor: pointer;
+        clicked => {
+            root.convert_files();
+        }
+    }
+
+    background: area.pressed ? pressed-color : area.has-hover ? hover-color : normal-color;
+
+    border-radius: 8px;
+
     Text {
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -187,8 +218,6 @@ export component AppWindow inherits Window {
     height: 800px;
     title: @tr("Jarod's Lost Ark Preset Converter");
     default-font-family: "Segoe UI";
-
-    callback request-increase-value();
 
     Background {
         VerticalLayout {
@@ -214,17 +243,16 @@ export component AppWindow inherits Window {
 
             VerticalBox {
                 alignment: center;
-                spacing: 0px;
-                Text {
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    font-size: 18px;
-                    text: @tr("Click to Convert");
-                }
+                spacing: 8px;
 
                 HorizontalLayout {
                     alignment: center;
                     RegionPanel { }
+                }
+
+                HorizontalLayout {
+                    alignment: center;
+                    ConvertButton { }
                 }
             }
         }

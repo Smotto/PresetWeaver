@@ -5,29 +5,9 @@
 #include <app-window.h>
 #include <windows.h>
 
-
-void enable_console_debugging(LPSTR lpCmdLine) {
-	// Allocate a console for this GUI application
-	AllocConsole();
-
-	// Redirect stdout, stdin, stderr to console
-	freopen_s(reinterpret_cast<FILE**>(stdout), "CONOUT$", "w", stdout);
-	freopen_s(reinterpret_cast<FILE**>(stderr), "CONOUT$", "w", stderr);
-	freopen_s(reinterpret_cast<FILE**>(stdin), "CONIN$", "r", stdin);
-
-	// Make cout, wcout, cin, wcin, wcerr, cerr, wclog and clog
-	// point to console as well
-	std::ios::sync_with_stdio(true);
-
-	// Now you can use printf, cout, etc.
-	DEBUG_LOG("Debug console is now available!");
-	printf("Command line: %s\n", lpCmdLine);
-}
-
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	_putenv("SLINT_BACKEND=winit-skia");
-	// enable_console_debugging(lpCmdLine);
-
+	auto                              ui               = AppWindow::create();
 	const std::unique_ptr<CusManager> cus_file_manager = std::make_unique<CusManager>();
 
 	if (!cus_file_manager->LoadFiles()) {
@@ -35,10 +15,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		return EXIT_FAILURE;
 	}
 
-	auto ui = AppWindow::create();
-
-	ui->global<GlobalVariables>().set_files(cus_file_manager->GetSlintModel());
 	ui->global<GlobalVariables>().set_local_region(slint::SharedString(OperatingSystemFunctions::GetLocalizationRegion()));
+	ui->global<GlobalVariables>().set_selected_region(slint::SharedString(OperatingSystemFunctions::GetLocalizationRegion()));
+	auto selected_region = ui->global<GlobalVariables>().get_selected_region();
+	cus_file_manager->RefreshUnconvertedFiles(selected_region.data());
+	ui->global<GlobalVariables>().set_unconverted_files(cus_file_manager->GetSlintModelUnconvertedFiles());
+
+	ui->global<GlobalVariables>().on_request_refresh_files([&cus_file_manager, &ui]() {
+		auto selected_region = ui->global<GlobalVariables>().get_selected_region();
+		cus_file_manager->RefreshUnconvertedFiles(selected_region.data());
+	});
 
 	ui->run();
 

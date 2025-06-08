@@ -5,6 +5,14 @@
 #include <filesystem>
 #include <unordered_set>
 
+// TODO: Cache files by region
+// unordered_map<region, vector>
+// internal files are 1 single source of truth, the UI has to all of it minus the huge amount of data each file carries
+//
+
+// UI. I should be able to see un_converted files based on selected region and current file[index] region
+// UI. I should be able to select a region and have a change in the selected files.
+
 class SlintCusFile;
 
 struct CusFile {
@@ -19,12 +27,11 @@ struct CusFile {
 class CusManager {
 public:
 	CusManager();
+	void RefreshUnconvertedFiles(const std::string& selected_region) const;
 	~CusManager() = default;
 
-	void                                              AddFile(const CusFile& file);
-	void                                              UpdateFile(const CusFile& file, size_t index);
-	std::shared_ptr<slint::VectorModel<SlintCusFile>> GetSlintModel();
-	CusFile&                                          GetInternalFile(size_t index);
+	void                                              AddFileToUI(const CusFile& file) const;
+	std::shared_ptr<slint::VectorModel<SlintCusFile>> GetSlintModelUnconvertedFiles();
 
 	std::vector<CusFile>&                             GetFiles();
 
@@ -36,9 +43,10 @@ public:
 
 private:
 	const std::unordered_set<std::string>             available_regions = std::unordered_set<std::string> { R"(USA)", R"(KOR)", R"(RUS)" };
+	std::shared_ptr<AppWindow>                        ui_instance;
 	std::filesystem::path                             customizing_directory;
 	std::vector<CusFile>                              internal_files;
-	std::shared_ptr<slint::VectorModel<SlintCusFile>> slint_model;
+	std::shared_ptr<slint::VectorModel<SlintCusFile>> slint_model_unconverted_files;
 
 	bool                                              LoadRegion(CusFile& file) const;
 };

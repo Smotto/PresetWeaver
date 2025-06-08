@@ -13,7 +13,7 @@
 /* Windows only */
 namespace OperatingSystemFunctions {
 	static std::string GetSteamInstallPath() {
-		std::cout << "Finding Windows Steam Install Path....." << "\n";
+		DEBUG_LOG("Finding Windows Steam Install Path.....");
 
 		HKEY        hKey;
 		const char* subkey = "SOFTWARE\\WOW6432Node\\Valve\\Steam";
@@ -45,7 +45,7 @@ namespace OperatingSystemFunctions {
 		std::ifstream                      file(path_to_vdf);
 
 		if (!file.is_open()) {
-			std::cerr << "Failed to open VDF file: " << path_to_vdf << "\n";
+			DEBUG_LOG("Failed to open VDF file: " << path_to_vdf);
 			return library_paths;
 		}
 
@@ -78,7 +78,7 @@ namespace OperatingSystemFunctions {
 					std::string raw_path = line.substr(first_quote + 1, second_quote - first_quote - 1);
 					ReplaceDoubleBackslashWithSlash(raw_path);
 					std::filesystem::path corrected_path = std::filesystem::path(raw_path) / "steamapps" / "common";
-					std::cout << corrected_path.generic_string() << "\n";
+					DEBUG_LOG(corrected_path.generic_string());
 					library_paths.emplace_back(corrected_path);
 				}
 			}
@@ -92,7 +92,7 @@ namespace OperatingSystemFunctions {
 		std::filesystem::path steam_path               = GetSteamInstallPath();
 		std::filesystem::path library_folders_vdf_path = steam_path / "steamapps" / "libraryfolders.vdf";
 
-		std::cout << "Reading: " << library_folders_vdf_path.string() << "\n";
+		DEBUG_LOG("Reading: " << library_folders_vdf_path.string());
 
 		std::vector<std::filesystem::path> paths = ParseSteamLibraryVDF(library_folders_vdf_path);
 
@@ -104,7 +104,8 @@ namespace OperatingSystemFunctions {
 		for (const auto& path : paths) {
 			std::filesystem::path desired_path = path / "Lost Ark" / "EFGame" / "Customizing";
 			if (std::filesystem::is_directory(desired_path)) {
-				std::cout << "LOA Customizing directory found in " << desired_path.generic_string() << "\n";
+				DEBUG_LOG("LOA Customizing directory found in " << desired_path.generic_string());
+
 				found_path = desired_path;
 				break;
 			}

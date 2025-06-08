@@ -8,22 +8,21 @@
 #include <utility>
 
 CusManager::CusManager()
-    : customizing_directory(OperatingSystemFunctions::FindLostArkCustomizationDirectory()), slint_model(std::make_shared<slint::VectorModel<SlintCusFile>>()) {
-	// TODO: move operating system functions somewhere else
-	std::filesystem::path customizing_directory_path = OperatingSystemFunctions::FindLostArkCustomizationDirectory();
-
-	DEBUG_LOG("Customizing path" << customizing_directory_path);
-
-	if (customizing_directory_path.empty()) {
-		DEBUG_LOG("Lost Ark customizing directory not found!");
-	}
-	customizing_directory = customizing_directory_path;
+    : customizing_directory(OperatingSystemFunctions::FindLostArkCustomizationDirectory()), slint_model_unconverted_files(std::make_shared<slint::VectorModel<SlintCusFile>>()) {
 }
 
-void CusManager::AddFile(const CusFile& file) {
-	internal_files.push_back(file);
+void CusManager::RefreshUnconvertedFiles(const std::string& selected_region) const {
+	slint_model_unconverted_files->clear();
 
-	slint_model->push_back(SlintCusFile {
+	for (const auto& file : internal_files) {
+		if (file.region != selected_region) { // Now you have the selected region
+			AddFileToUI(file);
+		}
+	}
+}
+
+void CusManager::AddFileToUI(const CusFile& file) const {
+	slint_model_unconverted_files->push_back(SlintCusFile {
 	    .path      = slint::SharedString(file.path_relative_to_customizing_directory.string()),
 	    .region    = slint::SharedString(file.region),
 	    .modified  = file.modified,
@@ -31,21 +30,8 @@ void CusManager::AddFile(const CusFile& file) {
 	    .data_size = static_cast<int>(file.data.size()) });
 }
 
-void CusManager::UpdateFile(const CusFile& file, size_t index) {
-	if (index < internal_files.size()) {
-		internal_files[index] = file;
-
-		// Update Slint Model
-		slint_model->set_row_data(index, SlintCusFile { .path = slint::SharedString(file.path_relative_to_customizing_directory.string()), .region = slint::SharedString(file.region), .modified = file.modified, .invalid = file.invalid, .data_size = static_cast<int>(file.data.size()) });
-	}
-}
-
-std::shared_ptr<slint::VectorModel<SlintCusFile>> CusManager::GetSlintModel() {
-	return slint_model;
-}
-
-CusFile& CusManager::GetInternalFile(size_t index) {
-	return internal_files[index];
+std::shared_ptr<slint::VectorModel<SlintCusFile>> CusManager::GetSlintModelUnconvertedFiles() {
+	return slint_model_unconverted_files;
 }
 
 std::vector<CusFile>& CusManager::GetFiles() {
@@ -62,7 +48,8 @@ bool CusManager::ModifyRegion(CusFile& file, const std::string& region_name) {
 		return false;
 	}
 
-	file.region = region_name;
+	file.region   = region_name;
+	file.modified = true;
 
 	return true;
 }
@@ -112,7 +99,7 @@ bool CusManager::LoadFiles() {
 					continue;
 				}
 
-				AddFile(file);
+				internal_files.push_back(file);
 			}
 		}
 
@@ -135,5 +122,6 @@ void CusManager::SaveModified() const {
 			saved++;
 		}
 	}
+
 	DEBUG_LOG("Saved " << saved << " modified files");
 }
