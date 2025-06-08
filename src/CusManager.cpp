@@ -10,7 +10,7 @@
 CusManager::CusManager()
     : customizing_directory(OperatingSystemFunctions::FindLostArkCustomizationDirectory()), slint_model(std::make_shared<slint::VectorModel<SlintCusFile>>()) {
 	// TODO: move operating system functions somewhere else
-	std::filesystem::path              customizing_directory_path    = OperatingSystemFunctions::FindLostArkCustomizationDirectory();
+	std::filesystem::path customizing_directory_path = OperatingSystemFunctions::FindLostArkCustomizationDirectory();
 
 	DEBUG_LOG("Customizing path" << customizing_directory_path);
 
@@ -128,9 +128,8 @@ void CusManager::SaveModified() const {
 	int saved = 0;
 	for (auto& file : internal_files) {
 		if (file.modified) {
-			// TODO: Needs customizing directory + relative path to customizing directory
-			std::string   file_write_out_path;
-			std::ofstream f(file.path_relative_to_customizing_directory, std::ios::binary);
+			std::filesystem::path file_write_out_path = customizing_directory / file.path_relative_to_customizing_directory;
+			std::ofstream         f(file_write_out_path, std::ios::binary);
 			f.write(file.data.data(), file.data.size());
 			f.close();
 			saved++;

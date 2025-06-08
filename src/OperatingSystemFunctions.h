@@ -1,12 +1,14 @@
 #ifndef OPERATINGSYSTEMFUNCTIONS_H_
 #define OPERATINGSYSTEMFUNCTIONS_H_
 
-#include <windows.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <regex>
+#include <string>
+#include <string_view>
 #include <vector>
+#include <windows.h>
 
 /* Windows only */
 namespace OperatingSystemFunctions {
@@ -113,17 +115,26 @@ namespace OperatingSystemFunctions {
 
 	static std::string GetLocalizationRegion() {
 		wchar_t localeName[LOCALE_NAME_MAX_LENGTH];
-		if (GetUserDefaultLocaleName(localeName, LOCALE_NAME_MAX_LENGTH)) {
-			std::wstring wlocale(localeName);
-			std::string  locale(wlocale.begin(), wlocale.end());
-
-			if (locale.find("en-US") != std::string::npos)
-				return "USA";
-			if (locale.find("ko-KR") != std::string::npos)
-				return "KOR";
-			if (locale.find("ru-RU") != std::string::npos)
-				return "RUS";
+		if (!GetUserDefaultLocaleName(localeName, LOCALE_NAME_MAX_LENGTH)) {
+			return "USA";
 		}
+
+		const int size_needed = WideCharToMultiByte(CP_UTF8, 0, localeName, -1, nullptr, 0, nullptr, nullptr);
+		if (size_needed <= 1) { // <= 1 because we need at least 1 char + null terminator
+			return "USA";
+		}
+
+		std::string locale(size_needed - 1, '\0'); // -1 to exclude null terminator
+		WideCharToMultiByte(CP_UTF8, 0, localeName, -1, locale.data(), size_needed, nullptr, nullptr);
+
+		const std::string_view locale_view { locale };
+
+		if (locale_view.find("en-US") != std::string_view::npos)
+			return "USA";
+		if (locale_view.find("ko-KR") != std::string_view::npos)
+			return "KOR";
+		if (locale_view.find("ru-RU") != std::string_view::npos)
+			return "RUS";
 
 		return "USA"; // default fallback
 	}

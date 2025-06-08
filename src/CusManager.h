@@ -3,8 +3,9 @@
 
 #include <app-window.h>
 #include <filesystem>
-#include <slint_models.h>
 #include <unordered_set>
+
+class SlintCusFile;
 
 struct CusFile {
 	std::filesystem::path path_relative_to_customizing_directory;
