@@ -8,68 +8,84 @@
 #include <utility>
 
 CusManager::CusManager()
-    : customizing_directory(OperatingSystemFunctions::FindLostArkCustomizationDirectory()), slint_model_unconverted_files(std::make_shared<slint::VectorModel<SlintCusFile>>()) {
+    : customizing_directory { OperatingSystemFunctions::FindLostArkCustomizationDirectory() },
+      slint_model_unconverted_files { std::make_shared<slint::VectorModel<SlintCusFile>>() },
+      internal_files { std::unordered_map<std::string, std::vector<CusFile>> {} } {
+	LoadFilesFromDisk();
 }
 
 void CusManager::RefreshUnconvertedFiles(const std::string& selected_region) const {
 	slint_model_unconverted_files->clear();
 
-	for (const auto& file : internal_files) {
-		if (file.region != selected_region) { // Now you have the selected region
-			AddFileToUI(file);
+	for (const std::string& region : available_regions) {
+		if (region == selected_region) {
+			continue;
+		}
+
+		auto region_iterator = internal_files.find(region);
+		if (region_iterator != internal_files.end()) {
+			for (const auto& [path_relative_to_customizing_directory, data, region, invalid] : region_iterator->second) {
+				if (region != selected_region) {
+					slint_model_unconverted_files->push_back(SlintCusFile {
+					    .path      = slint::SharedString(path_relative_to_customizing_directory.string()),
+					    .region    = slint::SharedString(region),
+					    .invalid   = invalid,
+					    .data_size = static_cast<int>(data.size()) });
+				}
+			}
 		}
 	}
-}
-
-void CusManager::AddFileToUI(const CusFile& file) const {
-	slint_model_unconverted_files->push_back(SlintCusFile {
-	    .path      = slint::SharedString(file.path_relative_to_customizing_directory.string()),
-	    .region    = slint::SharedString(file.region),
-	    .modified  = file.modified,
-	    .invalid   = file.invalid,
-	    .data_size = static_cast<int>(file.data.size()) });
 }
 
 std::shared_ptr<slint::VectorModel<SlintCusFile>> CusManager::GetSlintModelUnconvertedFiles() {
 	return slint_model_unconverted_files;
 }
 
-std::vector<CusFile>& CusManager::GetFiles() {
+const std::unordered_map<std::string, std::vector<CusFile>>& CusManager::GetFiles() const {
 	return internal_files;
 }
 
-size_t CusManager::Count() const {
-	return internal_files.size();
-}
-
 bool CusManager::ConvertFilesToRegion(const std::string& region_name) {
-	if (region_name.length() > 3) {
-		DEBUG_LOG("Region name too long, shouldn't be longer than 3 characters.");
+	if (region_name.length() != 3) {
+		DEBUG_LOG("Region name must be exactly 3 characters.");
 		return false;
 	}
 
-	for (CusFile& file : internal_files) {
-		if (file.region != region_name) {
-			file.region = region_name;
-			file.data[0x08] = region_name[0];
-			file.data[0x09] = region_name[1];
-			file.data[0x0A] = region_name[2];
-			file.modified = true;
+	std::vector<CusFile*> files_to_save;
+
+	for (const std::string& region : available_regions) {
+		if (region == region_name) {
+			continue;
+		}
+
+		auto region_iterator = internal_files.find(region);
+		if (region_iterator != internal_files.end()) {
+			auto& source_vector = region_iterator->second;
+			for (auto file_iterator = source_vector.rbegin(); file_iterator != source_vector.rend();) {
+				file_iterator->region     = region_name;
+				file_iterator->data[0x08] = region_name[0];
+				file_iterator->data[0x09] = region_name[1];
+				file_iterator->data[0x0A] = region_name[2];
+
+				files_to_save.push_back(&*file_iterator);
+				internal_files[region_name].push_back(std::move(*file_iterator));
+				file_iterator = std::reverse_iterator(source_vector.erase(std::next(file_iterator).base()));
+			}
+		} else {
+			DEBUG_LOG("Region is not available.");
 		}
 	}
 
-	return true;
+	return SaveFilesToDisk(files_to_save);
 }
 
 bool CusManager::LoadRegion(CusFile& file) const {
-	// Read region from bytes 0x08, 0x09, 0x0A
 	file.region += static_cast<char>(static_cast<unsigned char>(file.data[0x08]));
 	file.region += static_cast<char>(static_cast<unsigned char>(file.data[0x09]));
 	file.region += static_cast<char>(static_cast<unsigned char>(file.data[0x0A]));
 
-	// Validate region
 	if (!available_regions.contains(file.region)) {
-		file.invalid = true; // TODO: This is useless, file object goes into the void. IDC
+		file.invalid = true;
 		DEBUG_LOG("Warning: Invalid region '" << file.region << "' in " << file.path_relative_to_customizing_directory);
 		return false;
 	}
@@ -77,12 +93,12 @@ bool CusManager::LoadRegion(CusFile& file) const {
 	return true;
 }
 
-bool CusManager::LoadFiles() {
+bool CusManager::LoadFilesFromDisk() {
 	try {
 		for (const auto& entry : std::filesystem::recursive_directory_iterator(customizing_directory)) {
 			if (entry.is_regular_file() && entry.path().extension() == ".cus") {
 				CusFile file;
-				file.path_relative_to_customizing_directory = std::filesystem::relative(entry.path(), customizing_directory).string();
+				file.path_relative_to_customizing_directory = std::filesystem::relative(entry.path(), customizing_directory);
 
 				std::ifstream f(entry.path(), std::ios::binary);
 				if (!f.is_open())
@@ -92,25 +108,20 @@ bool CusManager::LoadFiles() {
 				size_t size = f.tellg();
 				f.seekg(0, std::ios::beg);
 
-				// Skipping super-small files.
-				if (size < 0x0B) {
+				if (size < 0x0B)
 					continue;
-				}
 
 				file.data.resize(size);
 				f.read(file.data.data(), size);
 				f.close();
 
-				// Skipping invalid files.
-				if (!LoadRegion(file)) {
+				if (!LoadRegion(file))
 					continue;
-				}
 
-				internal_files.push_back(file);
+				internal_files[file.region].push_back(std::move(file));
 			}
 		}
 
-		DEBUG_LOG("Loaded " << internal_files.size() << " .cus files");
 		return !internal_files.empty();
 	} catch (const std::exception& e) {
 		DEBUG_LOG("Error loading files: " << e.what());
@@ -118,17 +129,17 @@ bool CusManager::LoadFiles() {
 	}
 }
 
-void CusManager::SaveModified() const {
+bool CusManager::SaveFilesToDisk(std::vector<CusFile*> modified_files) const {
 	int saved = 0;
-	for (auto& file : internal_files) {
-		if (file.modified) {
-			std::filesystem::path file_write_out_path = customizing_directory / file.path_relative_to_customizing_directory;
-			std::ofstream         f(file_write_out_path, std::ios::binary);
-			f.write(file.data.data(), file.data.size());
-			f.close();
-			saved++;
-		}
+
+	for (const CusFile* file : modified_files) {
+		std::filesystem::path file_write_out_path = customizing_directory / file->path_relative_to_customizing_directory;
+		std::ofstream         f(file_write_out_path, std::ios::binary);
+		f.write(file->data.data(), file->data.size());
+		f.close();
+		saved++;
 	}
 
 	DEBUG_LOG("Saved " << saved << " modified files");
+	return true;
 }

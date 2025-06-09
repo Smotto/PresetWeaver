@@ -3,7 +3,6 @@ import { Button, VerticalBox, HorizontalBox, ScrollView, HorizontalBox } from "s
 export struct SlintCusFile {
     path: string,
     region: string,
-    modified: bool,
     invalid: bool,
     data_size: int}
 
@@ -12,8 +11,8 @@ export global GlobalVariables {
     in-out property <[SlintCusFile]> unconverted_files;
     in-out property <string> selected_region;
 
-    callback request-refresh-files();
-    callback convert-files();
+    callback request-refresh-files() -> bool;
+    callback convert-files() -> bool;
 }
 
 global RegionHelper {
@@ -218,6 +217,7 @@ component Background inherits Rectangle {
 export component AppWindow inherits Window {
     width: 768px;
     height: 800px;
+    always-on-top: true;
     title: @tr("Jarod's Lost Ark Preset Converter");
     default-font-family: "Segoe UI";
 

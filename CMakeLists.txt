@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(LostArkPresetConverter LANGUAGES CXX)
 
-# Enable Skia renderer feature before finding/fetching Slint
 set(SLINT_FEATURE_RENDERER_SKIA ON CACHE BOOL "Enable Skia renderer")
 
 find_package(Slint QUIET)
