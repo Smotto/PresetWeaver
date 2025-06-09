@@ -193,6 +193,7 @@ component ConvertButton inherits Rectangle {
     callback convert-clicked();
 
     area := TouchArea {
+        enabled: GlobalVariables.convert_button_flashing ? false : true;
         width: parent.width;
         height: parent.height;
         mouse-cursor: pointer;

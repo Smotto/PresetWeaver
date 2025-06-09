@@ -20,24 +20,24 @@ public:
 	CusManager();
 	~CusManager() = default;
 
-	void                                                                       RefreshUnconvertedFiles(const std::string& selected_region) const;
-	std::shared_ptr<slint::VectorModel<SlintCusFile>>                          GetSlintModelUnconvertedFiles();
+	void                                                                                        RefreshUnconvertedFiles(const std::string& selected_region) const;
+	std::shared_ptr<slint::VectorModel<SlintCusFile>>                                           GetSlintModelUnconvertedFiles();
 
-	[[nodiscard]] const std::unordered_map<std::string, std::vector<CusFile>>& GetFiles() const;
-	[[nodiscard]] bool                                                         ConvertFilesToRegion(const std::string& region_name);
+	[[nodiscard]] const std::unordered_map<std::string, std::vector<std::unique_ptr<CusFile>>>& GetFiles() const;
+	[[nodiscard]] bool                                                                          ConvertFilesToRegion(const std::string& region_name);
 
-	bool                                                                       SaveFilesToDisk(std::vector<CusFile*> modified_files) const;
+	bool                                                                                        SaveFilesToDisk(const std::vector<CusFile*>& modified_files) const;
 
 private:
-	const std::unordered_set<std::string>                 available_regions = { "USA", "KOR", "RUS" };
-	std::filesystem::path                                 customizing_directory;
+	const std::unordered_set<std::string>                                  available_regions = { "USA", "KOR", "RUS" };
+	std::filesystem::path                                                  customizing_directory;
 
-	std::shared_ptr<AppWindow>                            ui_instance;
-	std::shared_ptr<slint::VectorModel<SlintCusFile>>     slint_model_unconverted_files;
-	std::unordered_map<std::string, std::vector<CusFile>> internal_files; // TODO: This will be edited by a thread in the background that listens to operating system file data-modifications, adds, removes, renames.
+	std::shared_ptr<AppWindow>                                             ui_instance;
+	std::shared_ptr<slint::VectorModel<SlintCusFile>>                      slint_model_unconverted_files;
+	std::unordered_map<std::string, std::vector<std::unique_ptr<CusFile>>> internal_files; // TODO: This will be edited by a thread in the background that listens to operating system file data-modifications, adds, removes, renames.
 
-	bool                                                  LoadFilesFromDisk();
-	bool                                                  LoadRegion(CusFile& file) const;
+	bool                                                                   LoadFilesFromDisk();
+	bool                                                                   LoadRegion(CusFile& file) const;
 };
 
 #endif /* CUSMANAGER_H_ */
