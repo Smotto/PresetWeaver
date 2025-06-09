@@ -10,7 +10,7 @@
 CusManager::CusManager()
     : customizing_directory { OperatingSystemFunctions::FindLostArkCustomizationDirectory() },
       slint_model_unconverted_files { std::make_shared<slint::VectorModel<SlintCusFile>>() },
-      internal_files { std::unordered_map<std::string, std::vector<CusFile>> {} } {
+      internal_files { std::unordered_map<std::string, std::vector<std::unique_ptr<CusFile>>> {} } {
 	LoadFilesFromDisk();
 }
 
@@ -24,13 +24,13 @@ void CusManager::RefreshUnconvertedFiles(const std::string& selected_region) con
 
 		auto region_iterator = internal_files.find(region);
 		if (region_iterator != internal_files.end()) {
-			for (const auto& [path_relative_to_customizing_directory, data, region, invalid] : region_iterator->second) {
-				if (region != selected_region) {
+			for (const auto& file_ptr : region_iterator->second) {
+				if (file_ptr->region != selected_region) {
 					slint_model_unconverted_files->push_back(SlintCusFile {
-					    .path      = slint::SharedString(path_relative_to_customizing_directory.string()),
-					    .region    = slint::SharedString(region),
-					    .invalid   = invalid,
-					    .data_size = static_cast<int>(data.size()) });
+					    .path      = slint::SharedString(file_ptr->path_relative_to_customizing_directory.string()),
+					    .region    = slint::SharedString(file_ptr->region),
+					    .invalid   = file_ptr->invalid,
+					    .data_size = static_cast<int>(file_ptr->data.size()) });
 				}
 			}
 		}
@@ -41,7 +41,7 @@ std::shared_ptr<slint::VectorModel<SlintCusFile>> CusManager::GetSlintModelUncon
 	return slint_model_unconverted_files;
 }
 
-const std::unordered_map<std::string, std::vector<CusFile>>& CusManager::GetFiles() const {
+const std::unordered_map<std::string, std::vector<std::unique_ptr<CusFile>>>& CusManager::GetFiles() const {
 	return internal_files;
 }
 
@@ -62,17 +62,15 @@ bool CusManager::ConvertFilesToRegion(const std::string& region_name) {
 		if (region_iterator != internal_files.end()) {
 			auto& source_vector = region_iterator->second;
 			for (auto file_iterator = source_vector.rbegin(); file_iterator != source_vector.rend();) {
-				file_iterator->region     = region_name;
-				file_iterator->data[0x08] = region_name[0];
-				file_iterator->data[0x09] = region_name[1];
-				file_iterator->data[0x0A] = region_name[2];
+				(*file_iterator)->region     = region_name;
+				(*file_iterator)->data[0x08] = region_name[0];
+				(*file_iterator)->data[0x09] = region_name[1];
+				(*file_iterator)->data[0x0A] = region_name[2];
 
-				files_to_save.push_back(&*file_iterator);
+				files_to_save.push_back(file_iterator->get());
 				internal_files[region_name].push_back(std::move(*file_iterator));
 				file_iterator = std::reverse_iterator(source_vector.erase(std::next(file_iterator).base()));
 			}
-		} else {
-			DEBUG_LOG("Region is not available.");
 		}
 	}
 
@@ -118,7 +116,7 @@ bool CusManager::LoadFilesFromDisk() {
 				if (!LoadRegion(file))
 					continue;
 
-				internal_files[file.region].push_back(std::move(file));
+				internal_files[file.region].emplace_back(std::make_unique<CusFile>(std::move(file)));
 			}
 		}
 
@@ -129,7 +127,7 @@ bool CusManager::LoadFilesFromDisk() {
 	}
 }
 
-bool CusManager::SaveFilesToDisk(std::vector<CusFile*> modified_files) const {
+bool CusManager::SaveFilesToDisk(const std::vector<CusFile*>& modified_files) const {
 	int saved = 0;
 
 	for (const CusFile* file : modified_files) {
@@ -140,6 +138,6 @@ bool CusManager::SaveFilesToDisk(std::vector<CusFile*> modified_files) const {
 		saved++;
 	}
 
-	DEBUG_LOG("Saved " << saved << " modified files");
+	DEBUG_LOG("Saved " << saved << " modified files to disk.");
 	return true;
 }
