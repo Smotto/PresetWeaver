@@ -10,6 +10,7 @@ export global GlobalVariables {
     in property <string> local_region;
     in-out property <[SlintCusFile]> unconverted_files;
     in-out property <string> selected_region;
+    in-out property <bool> convert_button_flashing: false;
 
     callback request-refresh-files() -> bool;
     callback convert-files() -> bool;
@@ -177,11 +178,17 @@ component ConvertButton inherits Rectangle {
     property <color> normal-color: #2a2730;
     property <color> hover-color: #4a4458;
     property <color> pressed-color: #1a1620;
+    property <color> flash-color: #2ecc71;
+
+    property <color> flash-text-color: #1a1620;
 
     property <length> default_padding: 20px;
     property <length> default_font_size: 18px;
 
-    animate background { duration: 150ms; }
+    animate background {
+        duration: 150ms;
+        easing: ease-out;
+    }
 
     callback convert-clicked();
 
@@ -194,15 +201,29 @@ component ConvertButton inherits Rectangle {
         }
     }
 
-    background: area.pressed ? pressed-color : area.has-hover ? hover-color : normal-color;
+    background: GlobalVariables.convert_button_flashing ? flash-color : area.pressed ? pressed-color : area.has-hover ? hover-color : normal-color;
 
     border-radius: 8px;
 
     Text {
+        animate color {
+            duration: 150ms;
+            easing: ease-out;
+        }
+        animate font-weight {
+            duration: 150ms;
+            easing: ease-out;
+        }
+        animate font-size {
+            duration: 150ms;
+            easing: ease-out;
+        }
+        font-weight: GlobalVariables.convert_button_flashing ? 600 : 400;
+        color: GlobalVariables.convert_button_flashing ? flash-text-color : #FFFFFFFF;
         horizontal-alignment: center;
         vertical-alignment: center;
-        font-size: 20px;
-        text: @tr("🛠️ Convert");
+        font-size: GlobalVariables.convert_button_flashing ? 24px : 20px;
+        text: GlobalVariables.convert_button_flashing ? @tr("🥳 Success!") : @tr("🛠️ Convert");
     }
 }
 
@@ -210,7 +231,7 @@ component Background inherits Rectangle {
     Image {
         source: @image-url("assets/Echidna-Photopead.jpg");
         image-fit: preserve;
-        accessible-label: "Echidna Background";
+        accessible-label: "Background_Image";
     }
 }
 

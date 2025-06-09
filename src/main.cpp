@@ -27,10 +27,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ui->global<GlobalVariables>().on_convert_files([&cus_file_manager, &ui]() -> bool {
 		const auto region = ui->global<GlobalVariables>().get_selected_region();
 		if (!cus_file_manager->ConvertFilesToRegion(region.data())) {
-			DEBUG_LOG("How did the write fail?");
 			return false;
 		}
+
 		cus_file_manager->RefreshUnconvertedFiles(region.data());
+
+		ui->global<GlobalVariables>().set_convert_button_flashing(true);
+
+		slint::Timer::single_shot(std::chrono::milliseconds(500), [&ui]() {
+			ui->global<GlobalVariables>().set_convert_button_flashing(false);
+		});
+
 		return true;
 	});
 
