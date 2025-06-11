@@ -7,13 +7,15 @@ export struct SlintCusFile {
     data_size: int}
 
 export global GlobalVariables {
-    in property <string> local_region;
+    in property <string> local_region: "";
     in-out property <[SlintCusFile]> unconverted_files;
-    in-out property <string> selected_region;
+    in-out property <string> selected_region: "";
     in-out property <bool> convert_button_flashing: false;
+    in-out property <bool> automatically_converting: false;
 
-    callback request-refresh-files() -> bool;
-    callback convert-files() -> bool;
+    callback request-refresh-files();
+    callback convert-files();
+    callback toggle-automatic-conversion();
 }
 
 global RegionHelper {
@@ -171,10 +173,88 @@ component FilePanel {
     }
 }
 
-component ConvertButton inherits Rectangle {
+component AutomaticConversionButton inherits Rectangle {
     height: 60px;
     width: 160px;
 
+    property <color> normal-color: #2a2730;
+    property <color> hover-color: #4a4458;
+    property <color> pressed-color: #1a1620;
+    property <color> activated-color: 	#c37b9f;
+
+    property <color> activated-text-color: #FFFFFF00;
+
+    property <length> default_padding: 20px;
+    property <length> default_font_size: 18px;
+
+    animate background {
+        duration: 150ms;
+        easing: ease-out;
+    }
+
+    callback automatic-conversion-clicked();
+
+    area := TouchArea {
+        // TODO: Maybe a callback to when the thread is actually started or something? What happens when we press this really fast.
+            // Either use a bool value from the callback, or have another variable to keep track of for when the thread is actually started.
+        enabled: true;
+        width: parent.width;
+        height: parent.height;
+        mouse-cursor: pointer;
+
+        clicked => {
+            root.automatic-conversion-clicked();
+        }
+    }
+
+    background: GlobalVariables.automatically_converting ? activated-color : area.pressed ? pressed-color : area.has-hover ? hover-color : normal-color;
+
+    border-radius: 8px;
+
+    Image {
+        animate opacity {
+            duration: 150ms;
+            easing: ease-in-out;
+        }
+        visible: GlobalVariables.automatically_converting;
+        opacity: GlobalVariables.automatically_converting ? 100% : 0%;
+        width: 48px;
+        height: 48px;
+        source: @image-url("assets/mokoko-full.ico");
+        accessible-label: "Automatic Conversion Image";
+        image-fit: fill;
+
+        rotation-angle: GlobalVariables.automatically_converting ? sin(360deg * animation-tick() / 3s) * 10deg : 0deg;
+        rotation-origin-x: self.width / 2;
+        rotation-origin-y: self.height / 2;
+    }
+
+    Text {
+        visible: GlobalVariables.automatically_converting ? false : true;
+
+        animate color {
+            duration: 150ms;
+            easing: ease-out;
+        }
+        animate font-weight {
+            duration: 150ms;
+            easing: ease-out;
+        }
+        animate font-size {
+            duration: 150ms;
+            easing: ease-out;
+        }
+
+        color: GlobalVariables.automatically_converting ? activated-text-color : #FFFFFFFF;
+
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-size: 20px;
+        text: @tr("🔄 Auto");
+    }
+}
+
+component ConvertButton inherits Rectangle {
     property <color> normal-color: #2a2730;
     property <color> hover-color: #4a4458;
     property <color> pressed-color: #1a1620;
@@ -192,8 +272,13 @@ component ConvertButton inherits Rectangle {
 
     callback convert-clicked();
 
+    height: 60px;
+    width: GlobalVariables.automatically_converting ? 0px : 160px;
+    visible: GlobalVariables.automatically_converting ? false : true;
+
+    // TODO: Minor bug - The pointer doesn't go back from default state to pointer state when clicked and unmoved.
     area := TouchArea {
-        enabled: GlobalVariables.convert_button_flashing ? false : true;
+        enabled: GlobalVariables.automatically_converting ? false : GlobalVariables.convert_button_flashing ? false : true;
         width: parent.width;
         height: parent.height;
         mouse-cursor: pointer;
@@ -239,9 +324,10 @@ component Background inherits Rectangle {
 export component AppWindow inherits Window {
     width: 768px;
     height: 800px;
-    always-on-top: true;
+    always-on-top: true; // TODO: Useful for debugging; wouldn't do this for release.
     title: @tr("Jarod's Lost Ark Preset Converter");
     default-font-family: "Segoe UI";
+    icon: @image-url("assets/mokoko-half.ico");
 
     Background {
         VerticalLayout {
@@ -276,6 +362,17 @@ export component AppWindow inherits Window {
 
                 HorizontalLayout {
                     alignment: center;
+
+                    AutomaticConversionButton {
+                        automatic-conversion-clicked => {
+                            GlobalVariables.toggle-automatic-conversion();
+                        }
+                    }
+
+                    Rectangle {
+                        width: 5px;
+                    }
+
                     ConvertButton {
                         convert_clicked => {
                             GlobalVariables.convert-files();

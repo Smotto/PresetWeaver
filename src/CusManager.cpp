@@ -17,6 +17,7 @@ CusManager::CusManager()
 void CusManager::RefreshUnconvertedFiles(const std::string& selected_region) const {
 	slint_model_unconverted_files->clear();
 
+	// TODO: Maybe instead of having 1 source of unconverted files, we can have multiple regions have their own vector models. I'm lazy rn.
 	for (const std::string& region : available_regions) {
 		if (region == selected_region) {
 			continue;
