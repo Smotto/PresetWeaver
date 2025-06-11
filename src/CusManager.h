@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+class DirectoryMonitor;
 class SlintCusFile;
 
 struct CusFile {
@@ -22,6 +23,8 @@ public:
 
 	void                                                                                        RefreshUnconvertedFiles(const std::string& selected_region) const;
 	std::shared_ptr<slint::VectorModel<SlintCusFile>>                                           GetSlintModelUnconvertedFiles();
+
+	std::filesystem::path                                                                       GetCustomizingDirectory() const;
 
 	[[nodiscard]] const std::unordered_map<std::string, std::vector<std::unique_ptr<CusFile>>>& GetFiles() const;
 	[[nodiscard]] bool                                                                          ConvertFilesToRegion(const std::string& region_name);

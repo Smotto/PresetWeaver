@@ -42,6 +42,10 @@ std::shared_ptr<slint::VectorModel<SlintCusFile>> CusManager::GetSlintModelUncon
 	return slint_model_unconverted_files;
 }
 
+std::filesystem::path CusManager::GetCustomizingDirectory() const {
+	return customizing_directory;
+}
+
 const std::unordered_map<std::string, std::vector<std::unique_ptr<CusFile>>>& CusManager::GetFiles() const {
 	return internal_files;
 }
