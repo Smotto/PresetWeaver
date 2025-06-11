@@ -1,5 +1,5 @@
 #include "CusManager.h"
-#include "Debug.h"
+#include "DirectoryMonitor.h"
 #include "OperatingSystemFunctions.h"
 
 #include <app-window.h>
@@ -7,11 +7,12 @@
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	_putenv("SLINT_BACKEND=winit-skia");
-	auto                              ui               = AppWindow::create();
+	auto                                    ui                = AppWindow::create();
 
-	const std::unique_ptr<CusManager> cus_file_manager = std::make_unique<CusManager>();
+	const std::unique_ptr<CusManager>       cus_file_manager  = std::make_unique<CusManager>();
+	const std::unique_ptr<DirectoryMonitor> directory_monitor = std::make_unique<DirectoryMonitor>(cus_file_manager->GetCustomizingDirectory());
 
-	auto                              initial_region   = slint::SharedString(OperatingSystemFunctions::GetLocalizationRegion());
+	auto                                    initial_region    = slint::SharedString(OperatingSystemFunctions::GetLocalizationRegion());
 	ui->global<GlobalVariables>().set_local_region(initial_region);
 	ui->global<GlobalVariables>().set_selected_region(initial_region);
 
@@ -38,16 +39,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		});
 	});
 
-	ui->global<GlobalVariables>().on_toggle_automatic_conversion([&ui]() -> void {
-		// - Create the thread based on a request, only 1 thread can be created, a singleton thread in this case.
+	ui->global<GlobalVariables>().on_toggle_automatic_conversion([&ui, &directory_monitor]() -> void {
 		ui->global<GlobalVariables>().set_automatically_converting(!ui->global<GlobalVariables>().get_automatically_converting());
 
+		if (directory_monitor->IsMonitoringActive()) {
+			directory_monitor->StopMonitoring();
+		} else {
+			directory_monitor->ResumeMonitoring();
+		}
 	});
 
-
 	ui->run();
-
-	// - If any thread exists, destroy it.
 
 	return 0;
 }

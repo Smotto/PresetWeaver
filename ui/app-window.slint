@@ -269,12 +269,20 @@ component ConvertButton inherits Rectangle {
         duration: 150ms;
         easing: ease-out;
     }
+    animate width {
+         duration: 150ms;
+         easing: ease-out;
+    }
+    animate opacity {
+         duration: 150ms;
+         easing: ease-out;
+    }
 
     callback convert-clicked();
 
     height: 60px;
     width: GlobalVariables.automatically_converting ? 0px : 160px;
-    visible: GlobalVariables.automatically_converting ? false : true;
+    opacity: GlobalVariables.automatically_converting ? 0% : 100%;
 
     // TODO: Minor bug - The pointer doesn't go back from default state to pointer state when clicked and unmoved.
     area := TouchArea {

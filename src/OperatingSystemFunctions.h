@@ -1,6 +1,7 @@
 #ifndef OPERATINGSYSTEMFUNCTIONS_H_
 #define OPERATINGSYSTEMFUNCTIONS_H_
 
+#include "Debug.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
