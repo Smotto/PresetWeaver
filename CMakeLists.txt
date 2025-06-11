@@ -17,7 +17,7 @@ if (NOT Slint_FOUND)
     FetchContent_MakeAvailable(Slint)
 endif (NOT Slint_FOUND)
 
-add_executable(LostArkPresetConverter src/main.cpp src/CusManager.cpp src/Debug.h src/CusManager.h src/OperatingSystemFunctions.h)
+add_executable(LostArkPresetConverter src/main.cpp src/CusManager.cpp src/DirectoryMonitor.cpp src/Debug.h src/CusManager.h src/OperatingSystemFunctions.h src/DirectoryMonitor.h)
 target_link_libraries(LostArkPresetConverter PRIVATE Slint::Slint)
 set_target_properties(LostArkPresetConverter PROPERTIES
         WIN32_EXECUTABLE TRUE
