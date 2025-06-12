@@ -1,45 +1,150 @@
 #include "CusManager.h"
 
 #include "Debug.h"
+#include "DirectoryMonitor.h"
 #include "OperatingSystemFunctions.h"
 
 #include <fstream>
 #include <ranges>
 #include <utility>
 
-CusManager::CusManager()
-    : customizing_directory { OperatingSystemFunctions::FindLostArkCustomizationDirectory() },
-      slint_model_unconverted_files { std::make_shared<slint::VectorModel<SlintCusFile>>() },
-      internal_files { std::unordered_map<std::string, std::vector<std::unique_ptr<CusFile>>> {} } {
+CusManager::CusManager(slint::ComponentHandle<AppWindow> ui)
+    : ui_handle(std::move(ui)),
+      customizing_directory(OperatingSystemFunctions::FindLostArkCustomizationDirectory()),
+      directory_monitor(std::make_unique<DirectoryMonitor>(customizing_directory, true)),
+      slint_models_by_excluded_region {
+	      { "USA", std::make_shared<slint::VectorModel<SlintCusFile>>() },
+	      { "KOR", std::make_shared<slint::VectorModel<SlintCusFile>>() },
+	      { "RUS", std::make_shared<slint::VectorModel<SlintCusFile>>() }
+      },
+      region_files_map(std::unordered_map<std::string, std::vector<std::unique_ptr<CusFile>>> {}) {
+
 	LoadFilesFromDisk();
+
+	monitor_thread = std::thread([this]() {
+		while (file_handling_active) {
+			std::vector<DirectoryMonitor::ChangeInfo> changes = directory_monitor->CheckForDirectoryChanges();
+
+			if (!changes.empty()) {
+				std::lock_guard<std::mutex> lock(file_mutex);
+
+				for (const auto& change : changes) {
+					const auto& path = change.path;
+
+					switch (change.type) {
+						case DirectoryMonitor::ChangeInfo::ADDED:
+						case DirectoryMonitor::ChangeInfo::MODIFIED:
+							LoadFile(path);
+							break;
+
+						case DirectoryMonitor::ChangeInfo::DELETED:
+							RemoveFile(path);
+							break;
+
+						case DirectoryMonitor::ChangeInfo::RENAMED:
+							RemoveFile(change.old_path);
+							LoadFile(change.path);
+							break;
+					}
+				}
+
+				// Preventing a read-after-write crash
+				std::string region_copy = GetSelectedRegionSafe();
+				slint::invoke_from_event_loop([this, region_copy]() {
+					RefreshUnconvertedFiles(region_copy);
+				});
+			}
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		}
+	});
 }
 
-void CusManager::RefreshUnconvertedFiles(const std::string& selected_region) const {
-	slint_model_unconverted_files->clear();
+CusManager::~CusManager() {
+	file_handling_active = false;
+	if (monitor_thread.joinable()) {
+		monitor_thread.join();
+	}
+}
 
-	// TODO: Maybe instead of having 1 source of unconverted files, we can have multiple regions have their own vector models. I'm lazy rn.
-	for (const std::string& region : available_regions) {
-		if (region == selected_region) {
-			continue;
-		}
+void CusManager::LoadFile(const std::filesystem::path& full_path) {
+	if (full_path.extension() != ".cus")
+		return;
 
-		auto region_iterator = internal_files.find(region);
-		if (region_iterator != internal_files.end()) {
-			for (const auto& file_ptr : region_iterator->second) {
-				if (file_ptr->region != selected_region) {
-					slint_model_unconverted_files->push_back(SlintCusFile {
-					    .path      = slint::SharedString(file_ptr->path_relative_to_customizing_directory.string()),
-					    .region    = slint::SharedString(file_ptr->region),
-					    .invalid   = file_ptr->invalid,
-					    .data_size = static_cast<int>(file_ptr->data.size()) });
-				}
-			}
+	CusFile file;
+	file.path_relative_to_customizing_directory = std::filesystem::relative(full_path, customizing_directory);
+
+	std::ifstream f(full_path, std::ios::binary);
+	if (!f.is_open())
+		return;
+
+	f.seekg(0, std::ios::end);
+	size_t size = f.tellg();
+	if (size < 0x0B)
+		return;
+
+	f.seekg(0, std::ios::beg);
+	file.data.resize(size);
+	f.read(file.data.data(), size);
+	f.close();
+
+	if (!LoadRegion(file))
+		return;
+
+	auto& vec = region_files_map[file.region];
+	for (const auto& existing : vec) {
+		if (existing->path_relative_to_customizing_directory == file.path_relative_to_customizing_directory)
+			return; // Already present
+	}
+
+	vec.emplace_back(std::make_unique<CusFile>(std::move(file)));
+}
+
+void CusManager::RemoveFile(const std::filesystem::path& full_path) {
+	// TODO: Race condition, file is removed during conversion and the file removed is not monitored.
+	auto rel_path = std::filesystem::relative(full_path, customizing_directory);
+
+	for (auto& [region, vec] : region_files_map) {
+		auto it = std::remove_if(vec.begin(), vec.end(), [&](const std::unique_ptr<CusFile>& f) {
+			return f->path_relative_to_customizing_directory == rel_path;
+		});
+		if (it != vec.end()) {
+			vec.erase(it, vec.end());
+			break;
 		}
 	}
 }
 
-std::shared_ptr<slint::VectorModel<SlintCusFile>> CusManager::GetSlintModelUnconvertedFiles() {
-	return slint_model_unconverted_files;
+void CusManager::RefreshUnconvertedFiles(const std::string& excluded_region) const {
+	auto it = slint_models_by_excluded_region.find(excluded_region);
+	if (it != slint_models_by_excluded_region.end()) {
+		it->second->clear();
+
+		for (const std::string& region : available_regions) {
+			if (region == excluded_region) {
+				continue;
+			}
+
+			auto region_iterator = region_files_map.find(region);
+			if (region_iterator != region_files_map.end()) {
+				for (const auto& file_ptr : region_iterator->second) {
+					it->second->push_back(SlintCusFile { .path = slint::SharedString(file_ptr->path_relative_to_customizing_directory.string()), .region = slint::SharedString(file_ptr->region), .data_size = static_cast<int>(file_ptr->data.size()), .invalid = file_ptr->invalid });
+				}
+			}
+		}
+
+		if (excluded_region == "USA") {
+			ui_handle->global<GlobalVariables>().set_files_excluding_USA(it->second);
+		} else if (excluded_region == "KOR") {
+			ui_handle->global<GlobalVariables>().set_files_excluding_KOR(it->second);
+		} else if (excluded_region == "RUS") {
+			ui_handle->global<GlobalVariables>().set_files_excluding_RUS(it->second);
+		}
+	}
+}
+
+std::shared_ptr<slint::VectorModel<SlintCusFile>> CusManager::GetSlintModelFiles(const std::string& excluded_region) {
+	return slint_models_by_excluded_region.at(excluded_region);
 }
 
 std::filesystem::path CusManager::GetCustomizingDirectory() const {
@@ -47,7 +152,7 @@ std::filesystem::path CusManager::GetCustomizingDirectory() const {
 }
 
 const std::unordered_map<std::string, std::vector<std::unique_ptr<CusFile>>>& CusManager::GetFiles() const {
-	return internal_files;
+	return region_files_map;
 }
 
 bool CusManager::ConvertFilesToRegion(const std::string& region_name) {
@@ -63,8 +168,9 @@ bool CusManager::ConvertFilesToRegion(const std::string& region_name) {
 			continue;
 		}
 
-		auto region_iterator = internal_files.find(region);
-		if (region_iterator != internal_files.end()) {
+		// TODO: Time of check to time of use condition
+		auto region_iterator = region_files_map.find(region);
+		if (region_iterator != region_files_map.end()) {
 			auto& source_vector = region_iterator->second;
 			for (auto file_iterator = source_vector.rbegin(); file_iterator != source_vector.rend();) {
 				(*file_iterator)->region     = region_name;
@@ -73,7 +179,7 @@ bool CusManager::ConvertFilesToRegion(const std::string& region_name) {
 				(*file_iterator)->data[0x0A] = region_name[2];
 
 				files_to_save.push_back(file_iterator->get());
-				internal_files[region_name].push_back(std::move(*file_iterator));
+				region_files_map[region_name].push_back(std::move(*file_iterator));
 				file_iterator = std::reverse_iterator(source_vector.erase(std::next(file_iterator).base()));
 			}
 		}
@@ -121,11 +227,11 @@ bool CusManager::LoadFilesFromDisk() {
 				if (!LoadRegion(file))
 					continue;
 
-				internal_files[file.region].emplace_back(std::make_unique<CusFile>(std::move(file)));
+				region_files_map[file.region].emplace_back(std::make_unique<CusFile>(std::move(file)));
 			}
 		}
 
-		return !internal_files.empty();
+		return !region_files_map.empty();
 	} catch (const std::exception& e) {
 		DEBUG_LOG("Error loading files: " << e.what());
 		return false;
@@ -137,7 +243,13 @@ bool CusManager::SaveFilesToDisk(const std::vector<CusFile*>& modified_files) co
 
 	for (const CusFile* file : modified_files) {
 		std::filesystem::path file_write_out_path = customizing_directory / file->path_relative_to_customizing_directory;
-		std::ofstream         f(file_write_out_path, std::ios::binary);
+
+		if (!std::filesystem::exists(file_write_out_path)) {
+			DEBUG_LOG("Skipping write: file was deleted -> " << file_write_out_path);
+			continue;
+		}
+
+		std::ofstream f(file_write_out_path, std::ios::binary);
 		f.write(file->data.data(), file->data.size());
 		f.close();
 		saved++;
@@ -145,4 +257,14 @@ bool CusManager::SaveFilesToDisk(const std::vector<CusFile*>& modified_files) co
 
 	DEBUG_LOG("Saved " << saved << " modified files to disk.");
 	return true;
+}
+
+void CusManager::SetSelectedRegionSafe(const std::string& region) {
+	std::lock_guard<std::mutex> lock(selected_region_mutex);
+	selected_region = region;
+}
+
+std::string CusManager::GetSelectedRegionSafe() {
+	std::lock_guard<std::mutex> lock(selected_region_mutex);
+	return selected_region;
 }

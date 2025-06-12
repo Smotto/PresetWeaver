@@ -3,12 +3,15 @@ import { Button, VerticalBox, HorizontalBox, ScrollView, HorizontalBox } from "s
 export struct SlintCusFile {
     path: string,
     region: string,
-    invalid: bool,
-    data_size: int}
+    data_size: int,
+    invalid: bool}
 
 export global GlobalVariables {
     in property <string> local_region: "";
-    in-out property <[SlintCusFile]> unconverted_files;
+    in-out property <[SlintCusFile]> files_excluding_USA;
+    in-out property <[SlintCusFile]> files_excluding_KOR;
+    in-out property <[SlintCusFile]> files_excluding_RUS;
+
     in-out property <string> selected_region: "";
     in-out property <bool> convert_button_flashing: false;
     in-out property <bool> automatically_converting: false;
@@ -16,14 +19,42 @@ export global GlobalVariables {
     callback request-refresh-files();
     callback convert-files();
     callback toggle-automatic-conversion();
+    callback selected-region-changed(string);
 }
 
 global RegionHelper {
-    public pure function is_unconverted_files_empty() -> bool {
-        if (GlobalVariables.unconverted_files.length == 0) {
-            return true;
+    public pure function get_unconverted_files(excluded_file_region: string) -> [SlintCusFile] {
+        if (excluded_file_region == "USA") {
+            return GlobalVariables.files_excluding_USA;
+        } else if (excluded_file_region == "KOR") {
+            return GlobalVariables.files_excluding_KOR;
+        } else if (excluded_file_region == "RUS") {
+            return GlobalVariables.files_excluding_RUS;
         }
-        return false;
+        
+        return [];
+    }
+
+    public pure function get_unconverted_files_size(file_region: string) -> int {
+        if (file_region == "USA") {
+            return GlobalVariables.files_excluding_USA.length;
+        } else if (file_region == "KOR") {
+            return GlobalVariables.files_excluding_KOR.length;
+        } else if (file_region == "RUS") {
+            return GlobalVariables.files_excluding_RUS.length;
+        }
+        return 0;
+    }
+
+    public pure function is_unconverted_files_empty(excluded_file_region: string) -> bool {
+        if (excluded_file_region == "USA") {
+            return GlobalVariables.files_excluding_USA.length == 0;
+        } else if (excluded_file_region == "KOR") {
+            return GlobalVariables.files_excluding_KOR.length == 0;
+        } else if (excluded_file_region == "RUS") {
+            return GlobalVariables.files_excluding_RUS.length == 0;
+        }
+        return true;
     }
 
     public pure function is_file_converted(file_region: string) -> bool {
@@ -113,7 +144,10 @@ component RegionPanel inherits Rectangle {
             region_flag: RegionHelper.get-flag-image(region);
             toggled: GlobalVariables.selected_region == region;
             select_region => {
-                GlobalVariables.selected_region = region;
+                if (GlobalVariables.selected_region != region) {
+                    GlobalVariables.selected_region = region;
+                    GlobalVariables.selected-region-changed(region);
+                }
             }
         }
     }
@@ -161,11 +195,11 @@ component FilePanel {
             height: 200px;
 
             // How much we can scroll
-            viewport-height: GlobalVariables.unconverted_files.length * 50px;
+            viewport-height: RegionHelper.get_unconverted_files_size(GlobalVariables.selected_region) * 50px;
             viewport-width: 300px;
 
             VerticalBox {
-                for file[index] in GlobalVariables.unconverted_files: FileSlot {
+                for file[index] in RegionHelper.get_unconverted_files(GlobalVariables.selected_region): FileSlot {
                     file: file;
                 }
             }
@@ -176,6 +210,8 @@ component FilePanel {
 component AutomaticConversionButton inherits Rectangle {
     height: 60px;
     width: 160px;
+    border-radius: 8px;
+    background: GlobalVariables.automatically_converting ? activated-color : area.pressed ? pressed-color : area.has-hover ? hover-color : normal-color;
 
     property <color> normal-color: #2a2730;
     property <color> hover-color: #4a4458;
@@ -206,10 +242,6 @@ component AutomaticConversionButton inherits Rectangle {
             root.automatic-conversion-clicked();
         }
     }
-
-    background: GlobalVariables.automatically_converting ? activated-color : area.pressed ? pressed-color : area.has-hover ? hover-color : normal-color;
-
-    border-radius: 8px;
 
     Image {
         animate opacity {
@@ -255,6 +287,12 @@ component AutomaticConversionButton inherits Rectangle {
 }
 
 component ConvertButton inherits Rectangle {
+    width: GlobalVariables.automatically_converting ? 0px : 160px;
+    height: 60px;
+    opacity: GlobalVariables.automatically_converting ? 0% : 100%;
+    background: GlobalVariables.convert_button_flashing ? flash-color : area.pressed ? pressed-color : area.has-hover ? hover-color : normal-color;
+    border-radius: 8px;
+
     property <color> normal-color: #2a2730;
     property <color> hover-color: #4a4458;
     property <color> pressed-color: #1a1620;
@@ -270,19 +308,15 @@ component ConvertButton inherits Rectangle {
         easing: ease-out;
     }
     animate width {
-         duration: 150ms;
-         easing: ease-out;
+        duration: 150ms;
+        easing: ease-out;
     }
     animate opacity {
-         duration: 150ms;
-         easing: ease-out;
+        duration: 150ms;
+        easing: ease-out;
     }
 
     callback convert-clicked();
-
-    height: 60px;
-    width: GlobalVariables.automatically_converting ? 0px : 160px;
-    opacity: GlobalVariables.automatically_converting ? 0% : 100%;
 
     // TODO: Minor bug - The pointer doesn't go back from default state to pointer state when clicked and unmoved.
     area := TouchArea {
@@ -295,11 +329,8 @@ component ConvertButton inherits Rectangle {
         }
     }
 
-    background: GlobalVariables.convert_button_flashing ? flash-color : area.pressed ? pressed-color : area.has-hover ? hover-color : normal-color;
-
-    border-radius: 8px;
-
     Text {
+        opacity: GlobalVariables.automatically_converting ? 0% : 100%;
         animate color {
             duration: 150ms;
             easing: ease-out;
@@ -330,61 +361,63 @@ component Background inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
+    // TODO Minor bug: White background on first frame, has to do with opengl and skia backend renderer.
+    icon: @image-url("assets/mokoko-half.ico");
+    title: @tr("Jarod's Lost Ark Preset Converter");
+    always-on-top: true; // TODO: Useful for debugging; wouldn't do this for release.
+    background: transparent;
     width: 768px;
     height: 800px;
-    always-on-top: true; // TODO: Useful for debugging; wouldn't do this for release.
-    title: @tr("Jarod's Lost Ark Preset Converter");
     default-font-family: "Segoe UI";
-    icon: @image-url("assets/mokoko-half.ico");
 
-    Background {
-        VerticalLayout {
-            spacing: 20px;
+    Background { }
+
+    VerticalLayout {
+        spacing: 20px;
+        alignment: center;
+        HorizontalLayout {
             alignment: center;
+            Text {
+                font-size: 20px;
+                font-weight: 600;
+                text: @tr("Detected Region: ") + GlobalVariables.local_region;
+            }
+        }
+
+        HorizontalLayout {
+            alignment: center;
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            FilePanel { }
+        }
+
+        VerticalBox {
+            alignment: center;
+            spacing: 8px;
+
             HorizontalLayout {
                 alignment: center;
-                Text {
-                    font-size: 20px;
-                    font-weight: 600;
-                    text: @tr("Detected Region: ") + GlobalVariables.local_region;
-                }
+                RegionPanel { }
             }
 
             HorizontalLayout {
                 alignment: center;
-            }
 
-            HorizontalLayout {
-                alignment: center;
-                FilePanel { }
-            }
-
-            VerticalBox {
-                alignment: center;
-                spacing: 8px;
-
-                HorizontalLayout {
-                    alignment: center;
-                    RegionPanel { }
-                }
-
-                HorizontalLayout {
-                    alignment: center;
-
-                    AutomaticConversionButton {
-                        automatic-conversion-clicked => {
-                            GlobalVariables.toggle-automatic-conversion();
-                        }
+                AutomaticConversionButton {
+                    automatic-conversion-clicked => {
+                        GlobalVariables.toggle-automatic-conversion();
                     }
+                }
 
-                    Rectangle {
-                        width: 5px;
-                    }
+                Rectangle {
+                    width: 5px;
+                }
 
-                    ConvertButton {
-                        convert_clicked => {
-                            GlobalVariables.convert-files();
-                        }
+                ConvertButton {
+                    convert_clicked => {
+                        GlobalVariables.convert-files();
                     }
                 }
             }
