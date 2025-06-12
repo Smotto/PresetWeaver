@@ -36,6 +36,15 @@ void CusManager::LoadFile(const std::filesystem::path& full_path) {
 	CusFile file;
 	file.path_relative_to_customizing_directory = std::filesystem::relative(full_path, customizing_directory);
 
+	for (auto& [region, vec] : region_files_map) {
+		auto it = std::remove_if(vec.begin(), vec.end(), [&](const std::unique_ptr<CusFile>& f) {
+			return f->path_relative_to_customizing_directory == file.path_relative_to_customizing_directory;
+		});
+		if (it != vec.end()) {
+			vec.erase(it, vec.end());
+		}
+	}
+
 	std::ifstream f(full_path, std::ios::binary);
 	if (!f.is_open())
 		return;
@@ -141,14 +150,16 @@ bool CusManager::ConvertFilesToRegion(const std::string& region_name) {
 					continue;
 				}
 
-				file->region     = region_name;
-				file->data[0x08] = region_name[0];
-				file->data[0x09] = region_name[1];
-				file->data[0x0A] = region_name[2];
-
-				files_to_save.push_back(file);
-				region_files_map[region_name].push_back(std::move(*file_iterator));
+				auto file_ptr = std::move(*file_iterator);
 				file_iterator = std::reverse_iterator(source_vector.erase(std::next(file_iterator).base()));
+
+				file_ptr->region     = region_name;
+				file_ptr->data[0x08] = region_name[0];
+				file_ptr->data[0x09] = region_name[1];
+				file_ptr->data[0x0A] = region_name[2];
+
+				files_to_save.push_back(file_ptr.get());
+				region_files_map[region_name].push_back(std::move(file_ptr));
 			}
 		}
 	}
@@ -176,7 +187,7 @@ void CusManager::StartMonitorThread() {
 		std::unique_lock<std::mutex> lock(monitor_mutex);
 
 		while (file_handling_active) {
-			monitor_condition_variable.wait_for(lock, std::chrono::milliseconds(500), [this]() {
+			monitor_condition_variable.wait_for(lock, std::chrono::milliseconds(100), [this]() {
 				return !file_handling_active.load();
 			});
 
