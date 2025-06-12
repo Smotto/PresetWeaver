@@ -36,3 +36,6 @@
 
 # CMake build directory
 build
+
+extra-unused-assets
+ui/assets

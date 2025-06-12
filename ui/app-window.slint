@@ -67,15 +67,15 @@ global RegionHelper {
 
     public pure function get-flag-image(region: string) -> image {
         if (region == "USA") {
-            return @image-url("assets/united-states-of-america-flag-waving.svg");
+            return @image-url("assets/USA-flag.svg");
         }
         if (region == "KOR") {
-            return @image-url("assets/south-korea-flag-waving.svg");
+            return @image-url("assets/KOR-flag.svg");
         }
         if (region == "RUS") {
-            return @image-url("assets/russia-flag-waving.svg");
+            return @image-url("assets/RUS-flag.svg");
         }
-        return @image-url("assets/question-mark.svg");
+        return @image-url("assets/icon-half.ico");
     }
 }
 
