@@ -253,7 +253,7 @@ component AutomaticConversionButton inherits Rectangle {
         opacity: GlobalVariables.automatically_converting ? 100% : 0%;
         width: 48px;
         height: 48px;
-        source: @image-url("assets/mokoko-full.ico");
+        source: @image-url("assets/icon-full.ico");
         accessible-label: "Automatic Conversion Image";
         image-fit: fill;
 
@@ -363,7 +363,7 @@ component Background inherits Rectangle {
 
 export component AppWindow inherits Window {
     // TODO Minor bug: White background on first frame, has to do with opengl and skia backend renderer.
-    icon: @image-url("assets/mokoko-half.ico");
+    icon: @image-url("assets/icon-half.ico");
     title: @tr("PresetWeaver v.") + GlobalVariables.app-version;
     always-on-top: true;
     background: transparent;
