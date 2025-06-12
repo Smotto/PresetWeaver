@@ -1,7 +1,13 @@
 cmake_minimum_required(VERSION 3.21)
-project(LostArkPresetConverter LANGUAGES CXX)
+project(LostArkPresetConverter LANGUAGES C CXX)
 
+# Using either Skia or qt
 set(SLINT_FEATURE_RENDERER_SKIA ON CACHE BOOL "Enable Skia renderer")
+set(ENV{SLINT_BACKEND} winit-skia)
+
+#set(ENV{SLINT_BACKEND} qt)
+#set(Qt6_DIR "C:/SoftwareDevelopmentKits/Qt/6.9.0/mingw_64/lib/cmake/Qt6")
+#set(CMAKE_PREFIX_PATH "${Qt6_DIR}" ${CMAKE_PREFIX_PATH})
 
 find_package(Slint QUIET)
 if (NOT Slint_FOUND)
@@ -17,7 +23,8 @@ if (NOT Slint_FOUND)
     FetchContent_MakeAvailable(Slint)
 endif (NOT Slint_FOUND)
 
-add_executable(LostArkPresetConverter src/main.cpp src/CusManager.cpp src/DirectoryMonitor.cpp src/FileInfo.cpp src/Debug.h src/CusManager.h src/OperatingSystemFunctions.h src/DirectoryMonitor.h src/FileInfo.h)
+add_executable(LostArkPresetConverter src/main.cpp src/CusManager.cpp src/DirectoryMonitor.cpp src/FileInfo.cpp src/xxhash.c
+                                      src/Debug.h src/CusManager.h src/OperatingSystemFunctions.h src/DirectoryMonitor.h src/FileInfo.h src/xxhash.h)
 target_link_libraries(LostArkPresetConverter PRIVATE Slint::Slint)
 set_target_properties(LostArkPresetConverter PROPERTIES
         WIN32_EXECUTABLE TRUE

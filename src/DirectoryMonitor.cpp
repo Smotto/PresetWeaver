@@ -30,10 +30,6 @@ DirectoryMonitor::DirectoryMonitor(const std::filesystem::path& path, bool recur
 		throw std::runtime_error("Invalid directory path: " + root_path.generic_string());
 	}
 
-	// Take initial snapshot
-	file_cache = ScanDirectory();
-	DEBUG_LOG("Initial scan complete. Monitoring " << file_cache.size() << " items.");
-
 	StartMonitorThread();
 }
 
@@ -42,7 +38,7 @@ DirectoryMonitor::~DirectoryMonitor() {
 }
 
 void DirectoryMonitor::StartMonitorThread() {
-	monitor_thread = std::thread {&DirectoryMonitor::BackgroundTask, this};
+	monitor_thread = std::thread { &DirectoryMonitor::BackgroundTask, this };
 }
 
 void DirectoryMonitor::StopMonitorThread() {
@@ -103,67 +99,51 @@ void DirectoryMonitor::BackgroundTask() {
 }
 
 std::vector<DirectoryMonitor::ChangeInfo> DirectoryMonitor::CheckForDirectoryChanges() {
-	std::vector<ChangeInfo> changes;
-	auto                    currentSnapshot = ScanDirectory();
+	std::vector<ChangeInfo>                changes;
+	auto                                   currentSnapshot = ScanDirectory();
 
-	// Collect potential additions and deletions first
-	std::vector<ChangeInfo> potential_adds;
-	std::vector<ChangeInfo> potential_deletes;
+	// Maps for tracking renames via file_id
+	std::unordered_map<uint64_t, fs::path> old_id_to_path;
+	std::unordered_map<uint64_t, fs::path> new_id_to_path;
 
-	// Check for new and modified files
-	for (const auto& [path, currentInfo] : currentSnapshot) {
-		auto it = file_cache.find(path);
-		if (it == file_cache.end()) {
-			// Potentially new file/directory
-			potential_adds.push_back({ ChangeInfo::ADDED, path });
-		} else if (it->second != currentInfo) {
-			// Modified file/directory
-			changes.push_back({ ChangeInfo::MODIFIED, path });
+	for (const auto& [path, info] : file_cache) {
+		if (info.file_id != 0) {
+			old_id_to_path[info.file_id] = path;
 		}
 	}
 
-	// Check for deleted files
-	for (const auto& path : file_cache | std::views::keys) {
-		if (!currentSnapshot.contains(path)) {
-			potential_deletes.push_back({ ChangeInfo::DELETED, path });
+	for (const auto& [path, info] : currentSnapshot) {
+		if (info.file_id != 0) {
+			new_id_to_path[info.file_id] = path;
 		}
 	}
 
-	// Detect renames by matching content between deletes and adds
-	auto remaining_adds    = potential_adds;
-	auto remaining_deletes = potential_deletes;
+	// Detect modified and renamed files
+	for (const auto& [file_id, new_path] : new_id_to_path) {
+		auto old_it = old_id_to_path.find(file_id);
+		if (old_it != old_id_to_path.end()) {
+			const auto& old_path = old_it->second;
 
-	for (auto del_it = remaining_deletes.begin(); del_it != remaining_deletes.end();) {
-		bool found_rename = false;
+			const auto& old_info = file_cache.at(old_path);
+			const auto& new_info = currentSnapshot.at(new_path);
 
-		for (auto add_it = remaining_adds.begin(); add_it != remaining_adds.end(); ++add_it) {
-			// Get the old file info for the deleted file
-			auto old_file_it = file_cache.find(del_it->path);
-			if (old_file_it != file_cache.end()) {
-				auto new_file_it = currentSnapshot.find(add_it->path);
-				if (new_file_it != currentSnapshot.end()) {
-					// Get the new file info for the added file
-					if (old_file_it->second.HasSameContent(new_file_it->second)) {
-						changes.push_back({ ChangeInfo::RENAMED, add_it->path, del_it->path });
-						remaining_adds.erase(add_it);
-						del_it       = remaining_deletes.erase(del_it);
-						found_rename = true;
-						break;
-					}
-				}
+			if (old_path != new_path) {
+				changes.push_back({ ChangeInfo::RENAMED, new_path, old_path });
+			} else if (old_info != new_info) {
+				changes.push_back({ ChangeInfo::MODIFIED, new_path });
 			}
-		}
-
-		if (!found_rename) {
-			++del_it;
+		} else {
+			changes.push_back({ ChangeInfo::ADDED, new_path });
 		}
 	}
 
-	// Add remaining deletions and additions
-	changes.insert(changes.end(), remaining_deletes.begin(), remaining_deletes.end());
-	changes.insert(changes.end(), remaining_adds.begin(), remaining_adds.end());
+	// Detect deleted files
+	for (const auto& [file_id, old_path] : old_id_to_path) {
+		if (!new_id_to_path.contains(file_id)) {
+			changes.push_back({ ChangeInfo::DELETED, old_path });
+		}
+	}
 
-	// Update cache with current state
 	file_cache = std::move(currentSnapshot);
 	return changes;
 }
@@ -218,6 +198,8 @@ std::unordered_map<std::filesystem::path, FileInfo> DirectoryMonitor::ScanDirect
 	} catch (const fs::filesystem_error& error) {
 		DEBUG_LOG(error.what());
 	}
+
+	DEBUG_LOG("Scan complete. Monitoring " << file_cache.size() << " items.");
 
 	return current_files;
 }
