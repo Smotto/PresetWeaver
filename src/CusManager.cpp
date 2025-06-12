@@ -10,6 +10,7 @@
 
 CusManager::CusManager(slint::ComponentHandle<AppWindow> ui)
     : ui_handle(std::move(ui)),
+      selected_region(OperatingSystemFunctions::GetLocalizationRegion()),
       customizing_directory(OperatingSystemFunctions::FindLostArkCustomizationDirectory()),
       directory_monitor(std::make_unique<DirectoryMonitor>(customizing_directory, true)),
       slint_models_by_excluded_region {
@@ -21,50 +22,11 @@ CusManager::CusManager(slint::ComponentHandle<AppWindow> ui)
 
 	LoadFilesFromDisk();
 
-	monitor_thread = std::thread([this]() {
-		while (file_handling_active) {
-			std::vector<DirectoryMonitor::ChangeInfo> changes = directory_monitor->CheckForDirectoryChanges();
-
-			if (!changes.empty()) {
-				std::lock_guard<std::mutex> lock(file_mutex);
-
-				for (const auto& change : changes) {
-					const auto& path = change.path;
-
-					switch (change.type) {
-						case DirectoryMonitor::ChangeInfo::ADDED:
-						case DirectoryMonitor::ChangeInfo::MODIFIED:
-							LoadFile(path);
-							break;
-
-						case DirectoryMonitor::ChangeInfo::DELETED:
-							RemoveFile(path);
-							break;
-
-						case DirectoryMonitor::ChangeInfo::RENAMED:
-							RemoveFile(change.old_path);
-							LoadFile(change.path);
-							break;
-					}
-				}
-
-				// Preventing a read-after-write crash
-				std::string region_copy = GetSelectedRegionSafe();
-				slint::invoke_from_event_loop([this, region_copy]() {
-					RefreshUnconvertedFiles(region_copy);
-				});
-			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-		}
-	});
+	StartMonitorThread();
 }
 
 CusManager::~CusManager() {
-	file_handling_active = false;
-	if (monitor_thread.joinable()) {
-		monitor_thread.join();
-	}
+	StopMonitorThread();
 }
 
 void CusManager::LoadFile(const std::filesystem::path& full_path) {
@@ -101,7 +63,6 @@ void CusManager::LoadFile(const std::filesystem::path& full_path) {
 }
 
 void CusManager::RemoveFile(const std::filesystem::path& full_path) {
-	// TODO: Race condition, file is removed during conversion and the file removed is not monitored.
 	auto rel_path = std::filesystem::relative(full_path, customizing_directory);
 
 	for (auto& [region, vec] : region_files_map) {
@@ -168,17 +129,24 @@ bool CusManager::ConvertFilesToRegion(const std::string& region_name) {
 			continue;
 		}
 
-		// TODO: Time of check to time of use condition
 		auto region_iterator = region_files_map.find(region);
 		if (region_iterator != region_files_map.end()) {
 			auto& source_vector = region_iterator->second;
 			for (auto file_iterator = source_vector.rbegin(); file_iterator != source_vector.rend();) {
-				(*file_iterator)->region     = region_name;
-				(*file_iterator)->data[0x08] = region_name[0];
-				(*file_iterator)->data[0x09] = region_name[1];
-				(*file_iterator)->data[0x0A] = region_name[2];
+				CusFile* file = file_iterator->get();
 
-				files_to_save.push_back(file_iterator->get());
+				if (file->data.size() < 0x0B) {
+					DEBUG_LOG("Skipping incomplete file during conversion: " << file->path_relative_to_customizing_directory);
+					++file_iterator;
+					continue;
+				}
+
+				file->region     = region_name;
+				file->data[0x08] = region_name[0];
+				file->data[0x09] = region_name[1];
+				file->data[0x0A] = region_name[2];
+
+				files_to_save.push_back(file);
 				region_files_map[region_name].push_back(std::move(*file_iterator));
 				file_iterator = std::reverse_iterator(source_vector.erase(std::next(file_iterator).base()));
 			}
@@ -200,6 +168,75 @@ bool CusManager::LoadRegion(CusFile& file) const {
 	}
 
 	return true;
+}
+
+void CusManager::StartMonitorThread() {
+	monitor_thread = std::thread([this]() {
+		DEBUG_LOG("CusManager monitoring thread started.");
+		std::unique_lock<std::mutex> lock(monitor_mutex);
+
+		while (file_handling_active) {
+			monitor_condition_variable.wait_for(lock, std::chrono::milliseconds(500), [this]() {
+				return !file_handling_active.load();
+			});
+
+			if (!file_handling_active)
+				break;
+
+			lock.unlock();
+
+			auto changes = directory_monitor->CheckForDirectoryChanges();
+			if (!changes.empty()) {
+				std::lock_guard<std::mutex> file_lock(file_mutex);
+				for (const auto& change : changes) {
+					{
+						std::lock_guard<std::mutex> lock(recently_modified_mutex);
+						if (recently_modified_paths.contains(std::filesystem::weakly_canonical(change.path))) {
+							recently_modified_paths.erase(change.path); // Avoid skipping forever
+							continue;
+						}
+					}
+
+					switch (change.type) {
+						case DirectoryMonitor::ChangeInfo::ADDED:
+						case DirectoryMonitor::ChangeInfo::MODIFIED:
+							LoadFile(change.path);
+							break;
+						case DirectoryMonitor::ChangeInfo::DELETED:
+							RemoveFile(change.path);
+							break;
+						case DirectoryMonitor::ChangeInfo::RENAMED:
+							RemoveFile(change.old_path);
+							LoadFile(change.path);
+							break;
+					}
+				}
+
+				std::string region_copy = GetSelectedRegionSafe();
+				slint::invoke_from_event_loop([this, region_copy]() {
+					std::lock_guard<std::mutex> lock(conversion_mutex);
+					RefreshUnconvertedFiles(region_copy);
+					if (automatic_conversion_enabled.load()) {
+						if (ConvertFilesToRegion(region_copy)) {
+							DEBUG_LOG("Converted files to region: " << region_copy);
+						}
+					}
+				});
+			}
+
+			lock.lock();
+		}
+
+		DEBUG_LOG("CusManager monitoring thread exiting.");
+	});
+}
+
+void CusManager::StopMonitorThread() {
+	file_handling_active = false;
+	monitor_condition_variable.notify_all(); // Wake up thread if paused
+	if (monitor_thread.joinable()) {
+		monitor_thread.join();
+	}
 }
 
 bool CusManager::LoadFilesFromDisk() {
@@ -238,7 +275,7 @@ bool CusManager::LoadFilesFromDisk() {
 	}
 }
 
-bool CusManager::SaveFilesToDisk(const std::vector<CusFile*>& modified_files) const {
+bool CusManager::SaveFilesToDisk(const std::vector<CusFile*>& modified_files) {
 	int saved = 0;
 
 	for (const CusFile* file : modified_files) {
@@ -252,6 +289,12 @@ bool CusManager::SaveFilesToDisk(const std::vector<CusFile*>& modified_files) co
 		std::ofstream f(file_write_out_path, std::ios::binary);
 		f.write(file->data.data(), file->data.size());
 		f.close();
+
+		{
+			std::lock_guard<std::mutex> lock(recently_modified_mutex);
+			recently_modified_paths.insert(std::filesystem::weakly_canonical(file_write_out_path));
+		}
+
 		saved++;
 	}
 
@@ -267,4 +310,12 @@ void CusManager::SetSelectedRegionSafe(const std::string& region) {
 std::string CusManager::GetSelectedRegionSafe() {
 	std::lock_guard<std::mutex> lock(selected_region_mutex);
 	return selected_region;
+}
+
+bool CusManager::GetAutomaticConversionEnabled() const {
+	return automatic_conversion_enabled.load();
+}
+
+void CusManager::SetAutomaticConversionEnabled(bool enabled) {
+	automatic_conversion_enabled.store(enabled);
 }
