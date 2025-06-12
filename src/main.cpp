@@ -15,10 +15,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	ui->global<GlobalVariables>().set_local_region(initial_region);
 	ui->global<GlobalVariables>().set_selected_region(initial_region);
 
+	cus_file_manager->SetSelectedRegionSafe(initial_region.data());
 	cus_file_manager->RefreshUnconvertedFiles(initial_region.data());
+;
+	ui->global<GlobalVariables>().on_selected_region_changed([&cus_file_manager](const slint::SharedString& selected_region) {
+		std::lock_guard<std::mutex> lock(cus_file_manager->conversion_mutex);
 
-	ui->global<GlobalVariables>().on_selected_region_changed([&cus_file_manager](const slint::SharedString& excluded_region) {
-		cus_file_manager->SetSelectedRegionSafe(excluded_region.data());
+		cus_file_manager->SetSelectedRegionSafe(selected_region.data());
+
+		if (cus_file_manager->GetAutomaticConversionEnabled()) {
+			if (cus_file_manager->ConvertFilesToRegion(cus_file_manager->GetSelectedRegionSafe())) {
+				cus_file_manager->RefreshUnconvertedFiles(cus_file_manager->GetSelectedRegionSafe());
+			}
+		}
 	});
 
 	ui->global<GlobalVariables>().on_request_refresh_files([&cus_file_manager, &ui]() -> void {
@@ -41,13 +50,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		});
 	});
 
-	ui->global<GlobalVariables>().on_toggle_automatic_conversion([&ui, &directory_monitor]() -> void {
-		ui->global<GlobalVariables>().set_automatically_converting(!ui->global<GlobalVariables>().get_automatically_converting());
-
-		if (directory_monitor->IsMonitoringActive()) {
-			directory_monitor->StopMonitoring();
-		} else {
-			directory_monitor->ResumeMonitoring();
+	ui->global<GlobalVariables>().on_toggle_automatic_conversion([&ui, &cus_file_manager]() -> void {
+		bool enabled = !ui->global<GlobalVariables>().get_automatically_converting();
+		ui->global<GlobalVariables>().set_automatically_converting(enabled);
+		cus_file_manager->SetAutomaticConversionEnabled(enabled);
+		const auto region = ui->global<GlobalVariables>().get_selected_region();
+		if (cus_file_manager->ConvertFilesToRegion(region.data())) {
+			cus_file_manager->RefreshUnconvertedFiles(region.data());
 		}
 	});
 

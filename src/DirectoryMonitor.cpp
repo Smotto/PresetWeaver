@@ -29,73 +29,13 @@ DirectoryMonitor::DirectoryMonitor(const std::filesystem::path& path, bool recur
 	if (!fs::exists(root_path) || !fs::is_directory(root_path)) {
 		throw std::runtime_error("Invalid directory path: " + root_path.generic_string());
 	}
-
-	StartMonitorThread();
 }
 
 DirectoryMonitor::~DirectoryMonitor() {
-	StopMonitorThread();
 }
 
-void DirectoryMonitor::StartMonitorThread() {
-	monitor_thread = std::thread { &DirectoryMonitor::BackgroundTask, this };
-}
-
-void DirectoryMonitor::StopMonitorThread() {
-	monitor_thread_should_run = false;
-	monitor_thread_condition_variable.notify_all(); // Wake up thread if paused
-	if (monitor_thread.joinable()) {
-		monitor_thread.join();
-	}
-}
-
-void DirectoryMonitor::ResumeMonitoring() {
-	{
-		monitoring_active = true;
-		DEBUG_LOG("Monitoring is now active!");
-	}
-	monitor_thread_condition_variable.notify_all();
-}
-
-void DirectoryMonitor::StopMonitoring() {
-	{
-		monitoring_active = false;
-		DEBUG_LOG("Monitoring deactivated.");
-	}
-	monitor_thread_condition_variable.notify_all();
-}
-
-bool DirectoryMonitor::IsMonitoringActive() const {
-	return monitoring_active.load();
-}
-
-void DirectoryMonitor::BackgroundTask() {
-	std::unique_lock<std::mutex> lock(monitor_thread_mutex);
-
-	DEBUG_LOG("Background Task started.");
-
-	while (monitor_thread_should_run) {
-		monitor_thread_condition_variable.wait(lock, [this] {
-			return monitoring_active || !monitor_thread_should_run;
-		});
-
-		if (!monitor_thread_should_run) {
-			break;
-		}
-
-		lock.unlock();
-
-		std::vector<ChangeInfo> changes = CheckForDirectoryChanges();
-		if (!changes.empty()) {
-			PrintChanges(changes);
-		}
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(interval));
-
-		lock.lock();
-	}
-
-	DEBUG_LOG("Background Task stopped. Thread is exiting.");
+size_t DirectoryMonitor::GetFileCount() const {
+	return file_cache.size();
 }
 
 std::vector<DirectoryMonitor::ChangeInfo> DirectoryMonitor::CheckForDirectoryChanges() {
@@ -148,28 +88,9 @@ std::vector<DirectoryMonitor::ChangeInfo> DirectoryMonitor::CheckForDirectoryCha
 	return changes;
 }
 
-void DirectoryMonitor::PrintChanges(const std::vector<ChangeInfo>& changes) {
-	if (changes.empty()) {
-		DEBUG_LOG("No changes detected.");
-		return;
-	}
-
-	for (const auto& change : changes) {
-		if (change.type == ChangeInfo::RENAMED) {
-			DEBUG_LOG("[" << change.TypeToString() << "] " << change.old_path << " -> " << change.path);
-		} else {
-			DEBUG_LOG("[" << change.TypeToString() << "] " << change.path);
-		}
-	}
-}
-
-size_t DirectoryMonitor::GetFileCount() const {
-	return file_cache.size();
-}
-
 void DirectoryMonitor::ResetCache() {
 	file_cache = ScanDirectory();
-	DEBUG_LOG("Monitor reset. Now tracking " << file_cache.size() << " items.");
+	DEBUG_LOG("DirectoryMonitor reset. Now tracking " << file_cache.size() << " items.");
 }
 
 std::unordered_map<std::filesystem::path, FileInfo> DirectoryMonitor::ScanDirectory() const {
@@ -199,7 +120,22 @@ std::unordered_map<std::filesystem::path, FileInfo> DirectoryMonitor::ScanDirect
 		DEBUG_LOG(error.what());
 	}
 
-	DEBUG_LOG("Scan complete. Monitoring " << file_cache.size() << " items.");
+	DEBUG_LOG("Scan complete. Cached " << file_cache.size() << " items.");
 
 	return current_files;
+}
+
+void DirectoryMonitor::PrintChanges(const std::vector<ChangeInfo>& changes) {
+	if (changes.empty()) {
+		DEBUG_LOG("No changes detected.");
+		return;
+	}
+
+	for (const auto& change : changes) {
+		if (change.type == ChangeInfo::RENAMED) {
+			DEBUG_LOG("[" << change.TypeToString() << "] " << change.old_path << " -> " << change.path);
+		} else {
+			DEBUG_LOG("[" << change.TypeToString() << "] " << change.path);
+		}
+	}
 }
