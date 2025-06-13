@@ -1,5 +1,3 @@
----
-
 # PresetWeaver
 
 **An unofficial Lost Ark preset converter — automatic or manual!**
