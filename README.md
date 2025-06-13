@@ -1,5 +1,3 @@
-Here's a cleaner, easier-to-read version of your `README.md`:
-
 ---
 
 # PresetWeaver
