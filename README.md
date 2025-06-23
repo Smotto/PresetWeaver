@@ -1,19 +1,22 @@
-# PresetWeaver
-![demo_image_1.jpg](demo_image_1.jpg)
-**An unofficial Lost Ark preset converter — automatic or manual!**
-Download the `.zip` under [Releases](https://github.com/Smotto/PresetWeaver/releases) 👉
+<table>
+<tr>
+<td width="40%">
+<img src="demo_image_1.jpg" alt="Demo Image" width="100%">
+</td>
+<td width="60%">
+<h2>An unofficial Lost Ark preset converter — automatic or manual!</h2>
+<p><strong>Download the <code>.zip</code> under <a href="https://github.com/Smotto/PresetWeaver/releases">Releases</a> 👉</strong></p>
 
----
+### ✨ Features
 
-## ✨ Features
-
-* 🔍 **Auto-detects** your Lost Ark Customizing folder
-* 🌍 **Detects your local region** (no internet required)
-* 📄 Shows which files are **not yet converted** to your selected region
-* 🎨 Includes beautiful aesthetic artwork
-* ⚡ Lightweight: **< 1MB executable**
-
----
+- 🔍 <strong>Auto-detects</strong> your Lost Ark Customizing folder
+- 🌍 <strong>Detects your local region</strong> (no internet required)
+- 📄 Shows which files are <strong>not yet converted</strong> to your selected region
+- 🎨 Includes beautiful aesthetic artwork
+- ⚡ Lightweight: <strong>< 1MB executable</strong>
+</td>
+</tr>
+</table>
 
 ## 🛠 How to Use
 
