@@ -38,28 +38,32 @@ FileInfo::FileInfo(const fs::path& filepath) {
 	}
 }
 
+bool FileInfo::operator!=(const FileInfo& other) const {
+	return last_modified != other.last_modified ||
+	       is_directory != other.is_directory ||
+	       size != other.size ||
+	       content_hash != other.content_hash;
+}
+
 bool FileInfo::HasSameContent(const FileInfo& other) const {
-	return !content_hash.empty() && content_hash == other.content_hash &&
-	       size == other.size && is_directory == other.is_directory;
+	return !content_hash.empty() &&
+	       content_hash == other.content_hash &&
+	       size == other.size &&
+	       is_directory == other.is_directory;
 }
 
 std::string FileInfo::CalculateHash(const fs::path& filepath) {
 	try {
 		std::ifstream file(filepath, std::ios::binary);
-		if (!file.is_open()) return "";
+		if (!file.is_open())
+			return "";
 
 		std::vector<char> buffer((std::istreambuf_iterator<char>(file)), {});
-		uint64_t hash = XXH3_64bits(buffer.data(), buffer.size());
+		uint64_t          hash = XXH3_64bits(buffer.data(), buffer.size());
 		return std::to_string(hash);
 	} catch (...) {
 		return "";
 	}
-}
-
-bool FileInfo::operator!=(const FileInfo& other) const {
-	return last_modified != other.last_modified ||
-	       size != other.size ||
-	       is_directory != other.is_directory;
 }
 
 uint64_t FileInfo::GetFileID(const fs::path& filepath) {

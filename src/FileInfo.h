@@ -9,7 +9,7 @@ struct FileInfo {
 	std::chrono::time_point<std::chrono::file_clock> last_modified;
 	uintmax_t                                        size;
 	bool                                             is_directory;
-	std::string                                      content_hash; // For detecting renames
+	std::string                                      content_hash;
 	uint64_t                                         file_id = 0;
 
 	FileInfo();

@@ -199,26 +199,26 @@ void CusManager::StartMonitorThread() {
 			auto changes = directory_monitor->CheckForDirectoryChanges();
 			if (!changes.empty()) {
 				std::lock_guard<std::mutex> file_lock(file_mutex);
-				for (const auto& change : changes) {
+				for (auto iterator = changes.rbegin(); iterator != changes.rend(); ++iterator) {
 					{
 						std::lock_guard<std::mutex> lock(recently_modified_mutex);
-						if (recently_modified_paths.contains(std::filesystem::weakly_canonical(change.path))) {
-							recently_modified_paths.erase(change.path); // Avoid skipping forever
+						if (recently_modified_paths.contains(std::filesystem::weakly_canonical(iterator->path))) {
+							recently_modified_paths.erase(iterator->path); // Avoid skipping forever
 							continue;
 						}
 					}
 
-					switch (change.type) {
+					switch (iterator->type) {
 						case DirectoryMonitor::ChangeInfo::ADDED:
 						case DirectoryMonitor::ChangeInfo::MODIFIED:
-							LoadFile(change.path);
+							LoadFile(iterator->path);
 							break;
 						case DirectoryMonitor::ChangeInfo::DELETED:
-							RemoveFile(change.path);
+							RemoveFile(iterator->path);
 							break;
 						case DirectoryMonitor::ChangeInfo::RENAMED:
-							RemoveFile(change.old_path);
-							LoadFile(change.path);
+							RemoveFile(iterator->old_path);
+							LoadFile(iterator->path);
 							break;
 					}
 				}
