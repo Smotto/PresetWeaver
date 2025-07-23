@@ -150,8 +150,8 @@ bool CusManager::ConvertFilesToRegion(const std::string& region_name) {
 					continue;
 				}
 
-				auto file_ptr = std::move(*file_iterator);
-				file_iterator = std::reverse_iterator(source_vector.erase(std::next(file_iterator).base()));
+				auto file_ptr        = std::move(*file_iterator);
+				file_iterator        = std::reverse_iterator(source_vector.erase(std::next(file_iterator).base()));
 
 				file_ptr->region     = region_name;
 				file_ptr->data[0x08] = region_name[0];
@@ -198,31 +198,64 @@ void CusManager::StartMonitorThread() {
 
 			auto changes = directory_monitor->CheckForDirectoryChanges();
 			if (!changes.empty()) {
-				std::lock_guard<std::mutex> file_lock(file_mutex);
-				for (auto iterator = changes.rbegin(); iterator != changes.rend(); ++iterator) {
+				// Step 1: Coalesce changes by canonical path
+				struct CanonicalChange {
+					DirectoryMonitor::ChangeInfo::Type type;
+					fs::path                                 original_path;
+					fs::path                                 new_path;
+				};
+
+				std::unordered_map<fs::path, CanonicalChange> coalesced_changes;
+
+				for (const auto& change : changes) {
+					fs::path canonical_path;
+					try {
+						canonical_path = fs::weakly_canonical(change.path);
+					} catch (...) {
+						canonical_path = change.path; // fallback to original
+					}
+
+					coalesced_changes[canonical_path] = CanonicalChange {
+						change.type, change.old_path, change.path
+					};
+				}
+
+				// Step 2: Apply deletions first to ensure clean state
+				for (const auto& [canonical_path, change] : coalesced_changes) {
+					if (change.type == DirectoryMonitor::ChangeInfo::DELETED ||
+					    change.type == DirectoryMonitor::ChangeInfo::RENAMED) {
+						RemoveFile(change.original_path);
+					}
+				}
+
+				// Step 3: Apply additions and modifications
+				for (const auto& [canonical_path, change] : coalesced_changes) {
+					bool skip = false;
 					{
-						std::lock_guard<std::mutex> lock(recently_modified_mutex);
-						if (recently_modified_paths.contains(std::filesystem::weakly_canonical(iterator->path))) {
-							recently_modified_paths.erase(iterator->path); // Avoid skipping forever
-							continue;
+						std::lock_guard<std::mutex> recent_lock(recently_modified_mutex);
+						if (recently_modified_paths.contains(canonical_path)) {
+							recently_modified_paths.erase(canonical_path);
+							skip = true;
 						}
 					}
 
-					switch (iterator->type) {
+					if (skip)
+						continue;
+
+					switch (change.type) {
 						case DirectoryMonitor::ChangeInfo::ADDED:
 						case DirectoryMonitor::ChangeInfo::MODIFIED:
-							LoadFile(iterator->path);
-							break;
-						case DirectoryMonitor::ChangeInfo::DELETED:
-							RemoveFile(iterator->path);
+							LoadFile(change.new_path);
 							break;
 						case DirectoryMonitor::ChangeInfo::RENAMED:
-							RemoveFile(iterator->old_path);
-							LoadFile(iterator->path);
+							LoadFile(change.new_path);
+							break;
+						default:
 							break;
 					}
 				}
 
+				// Step 4: Refresh file list & trigger auto-conversion
 				std::string region_copy = GetSelectedRegionSafe();
 				slint::invoke_from_event_loop([this, region_copy]() {
 					std::lock_guard<std::mutex> lock(conversion_mutex);
