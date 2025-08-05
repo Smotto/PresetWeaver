@@ -42,11 +42,7 @@ This tool is still in **beta** and under active development.
 
 ---
 
-## 🌐 Community & Preset Sharing
-
-**Join our Discord server:**
-[https://discord.gg/ZmPwnfba73](https://discord.gg/ZmPwnfba73)
-
+## 🌐 Preset Sharing
 **Preset Channels:**
 
 * KOR: [KOR Presets](https://discord.com/channels/943866124292980796/944238985121787964)
